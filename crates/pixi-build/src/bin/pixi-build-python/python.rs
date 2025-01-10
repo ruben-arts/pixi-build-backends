@@ -8,6 +8,7 @@ use std::{
 };
 
 use chrono::Utc;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_backend::{
@@ -15,6 +16,7 @@ use pixi_build_backend::{
     protocol::{Protocol, ProtocolFactory},
     utils::TemporaryRenderedRecipe,
     variants::can_be_used_as_variant,
+    TargetExt,
 };
 use pixi_build_types::{
     procedures::{
@@ -23,9 +25,10 @@ use pixi_build_types::{
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
-    BackendCapabilities, CondaPackageMetadata, FrontendCapabilities, PlatformAndVirtualPackages,
+    BackendCapabilities, CondaPackageMetadata, FrontendCapabilities, PixiSpecV1,
+    PlatformAndVirtualPackages, ProjectModelV1, SourcePackageName, VersionedProjectModel,
 };
-use pixi_manifest::{Dependencies, Manifest, PackageManifest, SpecType};
+use pixi_manifest::{Dependencies, Manifest, SpecType};
 use pixi_spec::PixiSpec;
 use pyproject_toml::PyProjectToml;
 use rattler_build::{
@@ -63,7 +66,7 @@ pub struct PythonBuildBackend {
     logging_output_handler: LoggingOutputHandler,
     manifest_path: PathBuf,
     manifest_root: PathBuf,
-    package_manifest: PackageManifest,
+    project_model: ProjectModelV1,
     config: PythonBackendConfig,
     cache_dir: Option<PathBuf>,
     pyproject_manifest: Option<PyProjectToml>,
@@ -84,6 +87,7 @@ impl PythonBuildBackend {
     /// at the given path.
     pub fn new(
         manifest_path: &Path,
+        project_model: VersionedProjectModel,
         config: Option<PythonBackendConfig>,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
@@ -99,10 +103,6 @@ impl PythonBuildBackend {
             .parent()
             .ok_or_else(|| miette::miette!("the project manifest must reside in a directory"))?
             .to_path_buf();
-
-        let Some(package_manifest) = manifest.package else {
-            return Err(miette::miette!("no package manifest found in the manifest"));
-        };
 
         // Read config from the manifest itself if its not provided
         // TODO: I guess this should also be passed over the protocol.
@@ -126,10 +126,14 @@ impl PythonBuildBackend {
             None
         };
 
+        let v1 = project_model
+            .into_v1()
+            .ok_or_else(|| miette::miette!("project model is required"))?;
+
         Ok(Self {
             manifest_path: manifest.path,
             manifest_root,
-            package_manifest,
+            project_model: v1,
             config,
             logging_output_handler,
             cache_dir,
@@ -143,6 +147,9 @@ impl PythonBuildBackend {
         BackendCapabilities {
             provides_conda_metadata: Some(true),
             provides_conda_build: Some(true),
+            highest_supported_project_model: Some(
+                pixi_build_types::VersionedProjectModel::highest_version(),
+            ),
         }
     }
 
@@ -155,29 +162,43 @@ impl PythonBuildBackend {
         variant: &BTreeMap<NormalizedKey, String>,
     ) -> miette::Result<(Requirements, Installer)> {
         let mut requirements = Requirements::default();
+
         let targets = self
-            .package_manifest
+            .project_model
             .targets
             .resolve(Some(host_platform))
             .collect_vec();
 
-        let run_dependencies = Dependencies::from(
-            targets
-                .iter()
-                .filter_map(|f| f.dependencies(SpecType::Run).cloned().map(Cow::Owned)),
-        );
+        // let run_dependencies = Dependencies::from(
+        //     targets
+        //         .iter()
+        //         .filter_map(|f| f.dependencies(SpecType::Run).cloned().map(Cow::Owned)),
+        // );
 
-        let build_dependencies = Dependencies::from(
-            targets
-                .iter()
-                .filter_map(|f| f.dependencies(SpecType::Build).cloned().map(Cow::Owned)),
-        );
+        // let build_dependencies = Dependencies::from(
+        //     targets
+        //         .iter()
+        //         .filter_map(|f| f.dependencies(SpecType::Build).cloned().map(Cow::Owned)),
+        // );
 
-        let mut host_dependencies = Dependencies::from(
-            targets
-                .iter()
-                .filter_map(|f| f.dependencies(SpecType::Host).cloned().map(Cow::Owned)),
-        );
+        // let mut host_dependencies = Dependencies::from(
+        //     targets
+        //         .iter()
+        //         .filter_map(|f| f.dependencies(SpecType::Host).cloned().map(Cow::Owned)),
+        // );
+
+        let run_dependencies = targets
+            .iter()
+            .flat_map(|t| t.run_dependencies.iter())
+            .collect::<IndexMap<&SourcePackageName, &PixiSpecV1>>();
+        let host_dependencies = targets
+            .iter()
+            .flat_map(|t| t.run_dependencies.iter())
+            .collect::<IndexMap<&SourcePackageName, &PixiSpecV1>>();
+        let build_dependencies = targets
+            .iter()
+            .flat_map(|t| t.run_dependencies.iter())
+            .collect::<IndexMap<&SourcePackageName, &PixiSpecV1>>();
 
         // Determine the installer to use
         let installer = if host_dependencies.contains_key("uv")
@@ -219,9 +240,9 @@ impl PythonBuildBackend {
         variant: &BTreeMap<NormalizedKey, String>,
     ) -> miette::Result<Recipe> {
         // Parse the package name from the manifest
-        let package = &self.package_manifest.package;
+        let project_model = &self.project_model;
 
-        let name = PackageName::from_str(&package.name).into_diagnostic()?;
+        let name = PackageName::from_str(&project_model.name).into_diagnostic()?;
 
         let noarch_type = if self.config.noarch() {
             NoArchType::python()
@@ -288,7 +309,7 @@ impl PythonBuildBackend {
         Ok(Recipe {
             schema_version: 1,
             package: Package {
-                version: package.version.clone().into(),
+                version: project_model.version.clone().into(),
                 name,
             },
             context: Default::default(),
@@ -331,7 +352,7 @@ impl PythonBuildBackend {
         work_directory: &Path,
     ) -> miette::Result<BuildConfiguration> {
         // Parse the package name from the manifest
-        let name = self.package_manifest.package.name.clone();
+        let name = self.project_model.name.clone();
         let name = PackageName::from_str(&name).into_diagnostic()?;
 
         std::fs::create_dir_all(work_directory)
@@ -667,6 +688,9 @@ impl ProtocolFactory for PythonBuildBackendFactory {
     ) -> miette::Result<(Self::Protocol, InitializeResult)> {
         let instance = PythonBuildBackend::new(
             params.manifest_path.as_path(),
+            params
+                .project_model
+                .ok_or_else(|| miette::miette!("project model is required"))?,
             None,
             self.logging_output_handler.clone(),
             params.cache_directory,
@@ -688,6 +712,7 @@ mod tests {
 
     use std::{collections::BTreeMap, path::PathBuf};
 
+    use pixi_build_type_conversions::to_project_model_v1;
     use pixi_manifest::Manifest;
     use rattler_build::{console_utils::LoggingOutputHandler, recipe::Recipe};
     use rattler_conda_types::{ChannelConfig, Platform};
@@ -699,9 +724,13 @@ mod tests {
         let tmp_dir = tempdir().unwrap();
         let tmp_manifest = tmp_dir.path().join("pixi.toml");
         std::fs::write(&tmp_manifest, manifest_source).unwrap();
+        let manifest = pixi_manifest::Manifest::from_path(&tmp_manifest).unwrap();
+        let package = manifest.package.unwrap();
+        let project_model = to_project_model_v1(&package);
 
         let python_backend = PythonBuildBackend::new(
             &tmp_manifest,
+            project_model,
             Some(config),
             LoggingOutputHandler::default(),
             None,
@@ -794,9 +823,10 @@ mod tests {
         std::fs::write(&tmp_manifest, package_with_host_and_build_deps).unwrap();
 
         let manifest = Manifest::from_str(&tmp_manifest, package_with_host_and_build_deps).unwrap();
-
+        let project_model = to_project_model_v1(&manifest.package.unwrap());
         let python_backend = PythonBuildBackend::new(
             &manifest.path,
+            project_model,
             Some(PythonBackendConfig::default()),
             LoggingOutputHandler::default(),
             None,

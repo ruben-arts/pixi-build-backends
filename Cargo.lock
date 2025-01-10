@@ -1116,7 +1116,7 @@ dependencies = [
 [[package]]
 name = "fancy_display"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "console",
 ]
@@ -3085,6 +3085,7 @@ dependencies = [
  "miette",
  "minijinja",
  "parking_lot 0.12.3",
+ "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_consts",
  "pixi_manifest",
@@ -3107,12 +3108,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_type_conversions"
+version = "0.1.0"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
+dependencies = [
+ "indexmap 2.7.0",
+ "pixi_build_types",
+ "pixi_manifest",
+ "pixi_spec",
+ "rattler_conda_types",
+ "serde_json",
+]
+
+[[package]]
 name = "pixi_build_types"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
+ "indexmap 2.7.0",
  "rattler_conda_types",
+ "rattler_digest",
  "serde",
+ "serde_json",
  "serde_with",
  "url",
 ]
@@ -3120,7 +3137,7 @@ dependencies = [
 [[package]]
 name = "pixi_config"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "clap",
  "console",
@@ -3145,7 +3162,7 @@ dependencies = [
 [[package]]
 name = "pixi_consts"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "console",
  "rattler_cache",
@@ -3156,7 +3173,7 @@ dependencies = [
 [[package]]
 name = "pixi_git"
 version = "0.0.1"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "dashmap",
  "dunce",
@@ -3177,7 +3194,7 @@ dependencies = [
 [[package]]
 name = "pixi_manifest"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "console",
  "dunce",
@@ -3191,7 +3208,6 @@ dependencies = [
  "pixi_consts",
  "pixi_spec",
  "pixi_toml",
- "pixi_utils",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_virtual_packages",
@@ -3211,7 +3227,7 @@ dependencies = [
 [[package]]
 name = "pixi_spec"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "dirs",
  "file_url",
@@ -3226,6 +3242,7 @@ dependencies = [
  "thiserror 2.0.10",
  "toml-span",
  "toml_edit",
+ "tracing",
  "typed-path",
  "url",
 ]
@@ -3233,7 +3250,7 @@ dependencies = [
 [[package]]
 name = "pixi_toml"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "digest",
  "hex",
@@ -3246,7 +3263,7 @@ dependencies = [
 [[package]]
 name = "pixi_utils"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#7e877c3733447c40ca9b7039e20517e8cd591bb6"
+source = "git+https://github.com/tdejager/pixi?branch=feat/build-type-helper-method#e5e62d451d1b552d86cc022f0f755e2919655edd"
 dependencies = [
  "fd-lock",
  "fs-err",

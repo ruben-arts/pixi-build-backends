@@ -122,6 +122,9 @@ impl CMakeBuildBackend {
         BackendCapabilities {
             provides_conda_metadata: Some(true),
             provides_conda_build: Some(true),
+            highest_supported_project_model: Some(
+                pixi_build_types::VersionedProjectModel::highest_version(),
+            ),
         }
     }
 

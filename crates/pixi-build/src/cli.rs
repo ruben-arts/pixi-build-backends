@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use miette::{Context, IntoDiagnostic};
+use pixi_build_type_conversions::to_project_model_v1;
 use pixi_build_types::{
     procedures::{
         conda_build::CondaBuildParams,
@@ -10,7 +11,8 @@ use pixi_build_types::{
         initialize::InitializeParams,
         negotiate_capabilities::NegotiateCapabilitiesParams,
     },
-    ChannelConfiguration, FrontendCapabilities, PlatformAndVirtualPackages,
+    BackendCapabilities, ChannelConfiguration, FrontendCapabilities, PlatformAndVirtualPackages,
+    VersionedProjectModel,
 };
 use rattler_build::console_utils::{get_default_env_filter, LoggingOutputHandler};
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
@@ -27,6 +29,7 @@ use crate::{
 #[allow(missing_docs)]
 #[derive(Parser)]
 pub struct App {
+    /// The subcommand to run.
     #[clap(subcommand)]
     command: Option<Commands>,
 
@@ -59,6 +62,7 @@ pub enum Commands {
     Capabilities,
 }
 
+/// Run the sever on the specified port or over stdin/stdout.
 async fn run_server<T: ProtocolFactory>(port: Option<u16>, protocol: T) -> miette::Result<()> {
     let server = Server::new(protocol);
     if let Some(port) = port {
@@ -68,6 +72,7 @@ async fn run_server<T: ProtocolFactory>(port: Option<u16>, protocol: T) -> miett
     }
 }
 
+/// Run the main CLI.
 pub async fn main<T: ProtocolFactory, F: FnOnce(LoggingOutputHandler) -> T>(
     factory: F,
 ) -> miette::Result<()> {
@@ -83,7 +88,29 @@ pub async fn main<T: ProtocolFactory, F: FnOnce(LoggingOutputHandler) -> T>(
 
     match args.command {
         None => run_server(args.http_port, factory).await,
-        Some(Commands::Capabilities) => capabilities::<T>().await,
+        Some(Commands::Capabilities) => {
+            let backend_capabilities = capabilities::<T>().await?;
+            eprintln!(
+                "Supports conda metadata: {}",
+                backend_capabilities
+                    .provides_conda_metadata
+                    .unwrap_or_default()
+            );
+            eprintln!(
+                "Supports conda build: {}",
+                backend_capabilities
+                    .provides_conda_build
+                    .unwrap_or_default()
+            );
+            eprintln!(
+                "Highest project model: {}",
+                backend_capabilities
+                    .highest_supported_project_model
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| String::from("None"))
+            );
+            Ok(())
+        }
         Some(Commands::CondaBuild { manifest_path }) => build(factory, &manifest_path).await,
         Some(Commands::GetCondaMetadata {
             manifest_path,
@@ -96,8 +123,47 @@ pub async fn main<T: ProtocolFactory, F: FnOnce(LoggingOutputHandler) -> T>(
     }
 }
 
-async fn get_conda_metadata(
-    factory: impl ProtocolFactory,
+/// Convert manifest to project model
+fn project_model_v1(manifest_path: &Path) -> miette::Result<Option<VersionedProjectModel>> {
+    // Load the manifest
+    let manifest = pixi_manifest::Manifest::from_path(manifest_path)?;
+    let package = manifest.package;
+    // This can be null in the rattler-build backend
+    Ok(package.map(|manifest| to_project_model_v1(&manifest)))
+}
+
+/// Negotiate the capabilities of the backend and initalize the backend.
+async fn initalize<T: ProtocolFactory>(
+    factory: T,
+    manifest_path: &Path,
+) -> miette::Result<T::Protocol> {
+    // Negotiate the capabilities of the backend.
+    let capabilites = capabilities::<T>().await?;
+    let project_model = project_model_v1(manifest_path)?;
+
+    // Check if the project model is required
+    // and if it is not present, return an error.
+    if capabilites.highest_supported_project_model.is_some() && project_model.is_none() {
+        miette::bail!(
+            "Could not extract 'project_model' from: {}, while it is required",
+            manifest_path.display()
+        );
+    }
+
+    // Initialize the backend
+    let (protocol, _initialize_result) = factory
+        .initialize(InitializeParams {
+            manifest_path: manifest_path.to_path_buf(),
+            project_model,
+            cache_directory: None,
+        })
+        .await?;
+    Ok(protocol)
+}
+
+/// Frontend implementation for getting conda metadata.
+async fn get_conda_metadata<T: ProtocolFactory>(
+    factory: T,
     manifest_path: &Path,
     host_platform: Option<Platform>,
 ) -> miette::Result<CondaMetadataResult> {
@@ -108,13 +174,7 @@ async fn get_conda_metadata(
             .to_path_buf(),
     );
 
-    let (protocol, _initialize_result) = factory
-        .initialize(InitializeParams {
-            manifest_path: manifest_path.to_path_buf(),
-            cache_directory: None,
-        })
-        .await?;
-
+    let protocol = initalize(factory, manifest_path).await?;
     let virtual_packages: Vec<_> = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()?
         .into_iter()
@@ -142,28 +202,18 @@ async fn get_conda_metadata(
         .await
 }
 
-async fn capabilities<Factory: ProtocolFactory>() -> miette::Result<()> {
+/// Returns the capabilities of the backend.
+async fn capabilities<Factory: ProtocolFactory>() -> miette::Result<BackendCapabilities> {
     let result = Factory::negotiate_capabilities(NegotiateCapabilitiesParams {
         capabilities: FrontendCapabilities {},
     })
     .await?;
 
-    eprintln!(
-        "Supports conda metadata: {}",
-        result
-            .capabilities
-            .provides_conda_metadata
-            .unwrap_or_default()
-    );
-    eprintln!(
-        "Supports conda build: {}",
-        result.capabilities.provides_conda_build.unwrap_or_default()
-    );
-
-    Ok(())
+    Ok(result.capabilities)
 }
 
-async fn build(factory: impl ProtocolFactory, manifest_path: &Path) -> miette::Result<()> {
+/// Frontend implementation for building a conda package.
+async fn build<T: ProtocolFactory>(factory: T, manifest_path: &Path) -> miette::Result<()> {
     let channel_config = ChannelConfig::default_with_root_dir(
         manifest_path
             .parent()
@@ -171,13 +221,7 @@ async fn build(factory: impl ProtocolFactory, manifest_path: &Path) -> miette::R
             .to_path_buf(),
     );
 
-    let (protocol, _initialize_result) = factory
-        .initialize(InitializeParams {
-            manifest_path: manifest_path.to_path_buf(),
-            cache_directory: None,
-        })
-        .await?;
-
+    let protocol = initalize(factory, manifest_path).await?;
     let work_dir = TempDir::new_in(".")
         .into_diagnostic()
         .context("failed to create a temporary directory in the current directory")?;

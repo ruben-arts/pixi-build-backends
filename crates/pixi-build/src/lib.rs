@@ -2,9 +2,12 @@ pub mod cli;
 pub mod protocol;
 pub mod server;
 
+mod build_types_ext;
 mod consts;
 pub mod dependencies;
 pub mod manifest_ext;
 pub mod tools;
 pub mod utils;
 pub mod variants;
+
+pub use build_types_ext::{TargetExt, TargetSelectorExt};
