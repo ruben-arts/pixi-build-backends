@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     ffi::OsStr,
     path::{Path, PathBuf},
     str::FromStr,
@@ -20,7 +20,9 @@ use pixi_build_backend::{
 use pixi_build_types::{
     self as pbt,
     procedures::{
-        conda_build::{CondaBuildParams, CondaBuildResult, CondaBuiltPackage},
+        conda_build::{
+            CondaBuildParams, CondaBuildResult, CondaBuiltPackage, CondaOutputIdentifier,
+        },
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
@@ -214,7 +216,33 @@ impl PythonBuildBackend {
         Ok((requirements, installer))
     }
 
-    /// Constructs a [`Recipe`] from the current manifest.
+    /// Read the entry points from the pyproject.toml and return them as a list.
+    ///
+    /// If the manifest is not a pyproject.toml file no entry-points are added.
+    fn entry_points(&self) -> Vec<EntryPoint> {
+        let scripts = self
+            .pyproject_manifest
+            .as_ref()
+            .and_then(|p| p.project.as_ref())
+            .and_then(|p| p.scripts.as_ref());
+
+        scripts
+            .into_iter()
+            .flatten()
+            .flat_map(|(name, entry_point)| {
+                EntryPoint::from_str(&format!("{name} = {entry_point}"))
+            })
+            .collect()
+    }
+
+    /// Constructs a [`Recipe`] that will build the python package into a conda
+    /// package.
+    ///
+    /// If the package is editable, the recipe will not include the source but
+    /// only references to the original source files.
+    ///
+    /// Script entry points are read from the pyproject and added as entry
+    /// points in the conda package.
     fn recipe(
         &self,
         host_platform: Platform,
@@ -222,40 +250,28 @@ impl PythonBuildBackend {
         editable: bool,
         variant: &BTreeMap<NormalizedKey, String>,
     ) -> miette::Result<Recipe> {
-        // Parse the package name from the manifest
-        let project_model = &self.project_model;
+        // Parse the package name and version from the manifest
+        let name = PackageName::from_str(&self.project_model.name).into_diagnostic()?;
+        let version = self.project_model.version.clone();
 
-        let name = PackageName::from_str(&project_model.name).into_diagnostic()?;
-
+        // Determine whether the package should be built as a noarch package or as a
+        // generic package.
         let noarch_type = if self.config.noarch() {
             NoArchType::python()
         } else {
             NoArchType::none()
         };
 
-        // Determine the entry points from the pyproject.toml
-        // which would be passed into recipe
-        let python = if let Some(pyproject_manifest) = &self.pyproject_manifest {
-            let mut python = Python::default();
-            let scripts = pyproject_manifest
-                .project
-                .as_ref()
-                .and_then(|p| p.scripts.as_ref());
-            if let Some(scripts) = scripts {
-                python.entry_points = scripts
-                    .into_iter()
-                    .flat_map(|(name, entry_point)| {
-                        EntryPoint::from_str(&format!("{name} = {entry_point}"))
-                    })
-                    .collect();
-            }
-            python
-        } else {
-            Python::default()
+        // Construct python specific settings
+        let python = Python {
+            entry_points: self.entry_points(),
+            ..Python::default()
         };
 
         let (requirements, installer) =
             self.requirements(host_platform, channel_config, variant)?;
+
+        // Create a build script
         let build_platform = Platform::current();
         let build_number = 0;
 
@@ -274,7 +290,10 @@ impl PythonBuildBackend {
         }
         .render();
 
+        // Define the sources of the package.
         let source = if editable {
+            // In editable mode we don't include the source in the package, the package will
+            // refer back to the original source.
             Vec::new()
         } else {
             Vec::from([Source::Path(PathSource {
@@ -292,7 +311,7 @@ impl PythonBuildBackend {
         Ok(Recipe {
             schema_version: 1,
             package: Package {
-                version: project_model.version.clone().into(),
+                version: version.into(),
                 name,
             },
             context: Default::default(),
@@ -317,7 +336,6 @@ impl PythonBuildBackend {
                 // files: Default::default(),
                 ..Build::default()
             },
-            // TODO read from manifest
             requirements,
             tests: vec![],
             about: Default::default(),
@@ -326,31 +344,15 @@ impl PythonBuildBackend {
     }
 
     /// Returns the build configuration for a recipe
-    pub async fn build_configuration(
+    pub fn build_configuration(
         &self,
         recipe: &Recipe,
         channels: Vec<Url>,
         build_platform: Option<PlatformAndVirtualPackages>,
         host_platform: Option<PlatformAndVirtualPackages>,
-        work_directory: &Path,
+        variant: BTreeMap<NormalizedKey, String>,
+        directories: Directories,
     ) -> miette::Result<BuildConfiguration> {
-        // Parse the package name from the manifest
-        let name = self.project_model.name.clone();
-        let name = PackageName::from_str(&name).into_diagnostic()?;
-
-        std::fs::create_dir_all(work_directory)
-            .into_diagnostic()
-            .context("failed to create output directory")?;
-        let directories = Directories::setup(
-            name.as_normalized(),
-            &self.manifest_path,
-            work_directory,
-            true,
-            &Utc::now(),
-        )
-        .into_diagnostic()
-        .context("failed to setup build directories")?;
-
         let build_platform = build_platform.map(|p| PlatformWithVirtualPackages {
             platform: p.platform,
             virtual_packages: p.virtual_packages.unwrap_or_default(),
@@ -376,7 +378,6 @@ impl PythonBuildBackend {
             }
         };
 
-        let variant = BTreeMap::new();
         let channels = channels.into_iter().map(Into::into).collect();
 
         Ok(BuildConfiguration {
@@ -400,6 +401,49 @@ impl PythonBuildBackend {
             force_colors: true,
             sandbox_config: None,
         })
+    }
+
+    /// Determine the all the variants that can be built for this package.
+    ///
+    /// The variants are computed based on the dependencies of the package and
+    /// the input variants. Each package that has a `*` as its version we
+    /// consider as a potential variant. If an input variant configuration for
+    /// it exists we add it.
+    pub fn compute_variants(
+        &self,
+        input_variant_configuration: Option<HashMap<String, Vec<String>>>,
+        host_platform: Platform,
+    ) -> miette::Result<Vec<BTreeMap<NormalizedKey, String>>> {
+        // Create a variant config from the variant configuration in the parameters.
+        let variant_config = VariantConfig {
+            variants: input_variant_configuration
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(key, values)| (key.into(), values))
+                .collect(),
+            pin_run_as_build: None,
+            zip_keys: None,
+        };
+
+        // Determine the variant keys that are used in the recipe.
+        let used_variants = self
+            .project_model
+            .targets
+            .resolve(Some(host_platform))
+            .flat_map(|dep| {
+                dep.build_dependencies
+                    .iter()
+                    .chain(dep.run_dependencies.iter())
+                    .chain(dep.host_dependencies.iter())
+            })
+            .filter(|(_, spec)| can_be_used_as_variant(spec))
+            .map(|(name, _)| name.clone().into())
+            .collect();
+
+        // Determine the combinations of the used variants.
+        variant_config
+            .combinations(&used_variants, None)
+            .into_diagnostic()
     }
 }
 
@@ -463,6 +507,20 @@ impl Protocol for PythonBuildBackend {
             .map(|p| p.platform)
             .unwrap_or(Platform::current());
 
+        let package_name = PackageName::from_str(&self.project_model.name)
+            .into_diagnostic()
+            .context("`{name}` is not a valid package name")?;
+
+        let directories = Directories::setup(
+            package_name.as_normalized(),
+            &self.manifest_path,
+            &params.work_directory,
+            true,
+            &Utc::now(),
+        )
+        .into_diagnostic()
+        .context("failed to setup build directories")?;
+
         // Build the tool configuration
         let tool_config = Arc::new(
             Configuration::builder()
@@ -512,15 +570,14 @@ impl Protocol for PythonBuildBackend {
             // TODO: Determine how and if we can determine this from the manifest.
             let recipe = self.recipe(host_platform, &channel_config, false, &variant)?;
             let output = Output {
-                build_configuration: self
-                    .build_configuration(
-                        &recipe,
-                        channels.clone(),
-                        params.build_platform.clone(),
-                        params.host_platform.clone(),
-                        &params.work_directory.clone(),
-                    )
-                    .await?,
+                build_configuration: self.build_configuration(
+                    &recipe,
+                    channels.clone(),
+                    params.build_platform.clone(),
+                    params.host_platform.clone(),
+                    variant,
+                    directories.clone(),
+                )?,
                 recipe,
                 finalized_dependencies: None,
                 finalized_cache_dependencies: None,
@@ -595,70 +652,141 @@ impl Protocol for PythonBuildBackend {
             root_dir: self.manifest_root.to_path_buf(),
         };
         let channels = params.channel_base_urls.unwrap_or_default();
-
         let host_platform = params
             .host_platform
             .as_ref()
             .map(|p| p.platform)
             .unwrap_or_else(Platform::current);
 
-        let variant = BTreeMap::new();
+        let package_name = PackageName::from_str(&self.project_model.name)
+            .into_diagnostic()
+            .context("`{name}` is not a valid package name")?;
 
-        let recipe = self.recipe(host_platform, &channel_config, params.editable, &variant)?;
-        let output = Output {
-            build_configuration: self
-                .build_configuration(&recipe, channels, None, None, &params.work_directory)
-                .await?,
-            recipe,
-            finalized_dependencies: None,
-            finalized_cache_dependencies: None,
-            finalized_cache_sources: None,
-            finalized_sources: None,
-            build_summary: Arc::default(),
-            system_tools: Default::default(),
-            extra_meta: None,
-        };
-        let tool_config = Configuration::builder()
-            .with_opt_cache_dir(self.cache_dir.clone())
-            .with_logging_output_handler(self.logging_output_handler.clone())
-            .with_channel_config(channel_config.clone())
-            .with_testing(false)
-            .finish();
+        let directories = Directories::setup(
+            package_name.as_normalized(),
+            &self.manifest_path,
+            &params.work_directory,
+            true,
+            &Utc::now(),
+        )
+        .into_diagnostic()
+        .context("failed to setup build directories")?;
 
-        let temp_recipe = TemporaryRenderedRecipe::from_output(&output)?;
+        // Recompute all the variant combinations
+        let variant_combinations =
+            self.compute_variants(params.variant_configuration, host_platform)?;
 
-        let mut output_with_build_string = output.clone();
+        // Compute outputs for each variant
+        let mut outputs = Vec::with_capacity(variant_combinations.len());
+        for variant in variant_combinations {
+            let recipe = self.recipe(host_platform, &channel_config, params.editable, &variant)?;
+            let build_configuration = self.build_configuration(
+                &recipe,
+                channels.clone(),
+                params.host_platform.clone(),
+                Some(PlatformAndVirtualPackages {
+                    platform: host_platform,
+                    virtual_packages: params.build_platform_virtual_packages.clone(),
+                }),
+                variant,
+                directories.clone(),
+            )?;
 
-        let selector_config = output.build_configuration.selector_config();
+            let mut output = Output {
+                build_configuration,
+                recipe,
+                finalized_dependencies: None,
+                finalized_cache_dependencies: None,
+                finalized_cache_sources: None,
+                finalized_sources: None,
+                build_summary: Arc::default(),
+                system_tools: Default::default(),
+                extra_meta: None,
+            };
 
-        let jinja = Jinja::new(selector_config.clone()).with_context(&output.recipe.context);
-
-        let hash = HashInfo::from_variant(output.variant(), output.recipe.build().noarch());
-        let build_string =
-            output
+            // Resolve the build string
+            let selector_config = output.build_configuration.selector_config();
+            let jinja = Jinja::new(selector_config.clone()).with_context(&output.recipe.context);
+            let hash = HashInfo::from_variant(output.variant(), output.recipe.build().noarch());
+            let build_string = output
                 .recipe
                 .build()
                 .string()
-                .resolve(&hash, output.recipe.build().number(), &jinja);
-        output_with_build_string.recipe.build.string =
-            BuildString::Resolved(build_string.to_string());
+                .resolve(&hash, output.recipe.build().number(), &jinja)
+                .into_owned();
+            output.recipe.build.string = BuildString::Resolved(build_string);
 
-        let (output, package) = temp_recipe
-            .within_context_async(move || async move {
-                run_build(output_with_build_string, &tool_config).await
-            })
-            .await?;
+            outputs.push(output);
+        }
 
-        Ok(CondaBuildResult {
-            packages: vec![CondaBuiltPackage {
+        // Setup tool configuration
+        let tool_config = Arc::new(
+            Configuration::builder()
+                .with_opt_cache_dir(self.cache_dir.clone())
+                .with_logging_output_handler(self.logging_output_handler.clone())
+                .with_channel_config(channel_config.clone())
+                .with_testing(false)
+                .with_keep_build(true)
+                .finish(),
+        );
+
+        // Determine the outputs to build
+        let selected_outputs = if let Some(output_identifiers) = params.outputs {
+            output_identifiers
+                .into_iter()
+                .filter_map(|iden| {
+                    let pos = outputs.iter().position(|output| {
+                        let CondaOutputIdentifier {
+                            name,
+                            version,
+                            build,
+                            subdir,
+                        } = &iden;
+                        name.as_ref()
+                            .map_or(true, |n| output.name().as_normalized() == n)
+                            && version
+                                .as_ref()
+                                .map_or(true, |v| output.version().to_string() == *v)
+                            && build
+                                .as_ref()
+                                .map_or(true, |b| output.build_string() == b.as_str())
+                            && subdir
+                                .as_ref()
+                                .map_or(true, |s| output.target_platform().as_str() == s)
+                    })?;
+                    Some(outputs.remove(pos))
+                })
+                .collect()
+        } else {
+            outputs
+        };
+
+        let mut packages = Vec::with_capacity(selected_outputs.len());
+        for output in selected_outputs {
+            let temp_recipe = TemporaryRenderedRecipe::from_output(&output)?;
+            let build_string = output
+                .recipe
+                .build
+                .string
+                .as_resolved()
+                .expect("build string must have already been resolved")
+                .to_string();
+            let tool_config = tool_config.clone();
+            let (output, package) = temp_recipe
+                .within_context_async(move || async move { run_build(output, &tool_config).await })
+                .await?;
+            let built_package = CondaBuiltPackage {
                 output_file: package,
                 input_globs: input_globs(),
                 name: output.name().as_normalized().to_string(),
                 version: output.version().to_string(),
                 build: build_string.to_string(),
                 subdir: output.target_platform().to_string(),
-            }],
-        })
+            };
+            packages.push(built_package);
+        }
+
+        Ok(CondaBuildResult { packages })
     }
 }
 
