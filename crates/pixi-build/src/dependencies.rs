@@ -71,7 +71,7 @@ impl<'a> MatchspecExtractor<'a> {
         for (name, spec) in dependencies.into_iter() {
             let name = PackageName::from_str(name.as_str()).into_diagnostic()?;
             // If we have a variant override, we should use that instead of the spec.
-            if can_be_used_as_variant(&spec) {
+            if can_be_used_as_variant(spec) {
                 if let Some(variant_value) = self
                     .variant
                     .as_ref()
@@ -105,7 +105,7 @@ impl<'a> MatchspecExtractor<'a> {
                 pbt::PackageSpecV1::Source(source_spec) => match source_spec {
                     pbt::SourcePackageSpecV1::Path(path) => {
                         let path =
-                            resolve_path(&Path::new(&path.path), root_dir).ok_or_else(|| {
+                            resolve_path(Path::new(&path.path), root_dir).ok_or_else(|| {
                                 miette::miette!("failed to resolve home dir for: {}", path.path)
                             })?;
                         if self.ignore_self && path.as_path() == root_dir.as_path() {

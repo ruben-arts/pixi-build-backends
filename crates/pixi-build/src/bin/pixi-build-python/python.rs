@@ -206,7 +206,7 @@ impl PythonBuildBackend {
                 continue;
             }
 
-            host_dependencies.insert(&pkg_name, &any);
+            host_dependencies.insert(pkg_name, &any);
         }
 
         requirements.build = extract_dependencies(channel_config, build_dependencies, variant)?;

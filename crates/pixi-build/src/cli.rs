@@ -138,13 +138,13 @@ fn project_model_v1(
     }))
 }
 
-/// Negotiate the capabilities of the backend and initalize the backend.
-async fn initalize<T: ProtocolFactory>(
+/// Negotiate the capabilities of the backend and initialize the backend.
+async fn initialize<T: ProtocolFactory>(
     factory: T,
     manifest_path: &Path,
 ) -> miette::Result<T::Protocol> {
     // Negotiate the capabilities of the backend.
-    let capabilites = capabilities::<T>().await?;
+    let capabilities = capabilities::<T>().await?;
     let channel_config = ChannelConfig::default_with_root_dir(
         manifest_path
             .parent()
@@ -155,7 +155,7 @@ async fn initalize<T: ProtocolFactory>(
 
     // Check if the project model is required
     // and if it is not present, return an error.
-    if capabilites.highest_supported_project_model.is_some() && project_model.is_none() {
+    if capabilities.highest_supported_project_model.is_some() && project_model.is_none() {
         miette::bail!(
             "Could not extract 'project_model' from: {}, while it is required",
             manifest_path.display()
@@ -186,7 +186,7 @@ async fn get_conda_metadata<T: ProtocolFactory>(
             .to_path_buf(),
     );
 
-    let protocol = initalize(factory, manifest_path).await?;
+    let protocol = initialize(factory, manifest_path).await?;
     let virtual_packages: Vec<_> = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
         .into_diagnostic()?
         .into_iter()
@@ -233,7 +233,7 @@ async fn build<T: ProtocolFactory>(factory: T, manifest_path: &Path) -> miette::
             .to_path_buf(),
     );
 
-    let protocol = initalize(factory, manifest_path).await?;
+    let protocol = initialize(factory, manifest_path).await?;
     let work_dir = TempDir::new_in(".")
         .into_diagnostic()
         .context("failed to create a temporary directory in the current directory")?;
