@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::BTreeMap,
     path::{Path, PathBuf},
     str::FromStr,
@@ -7,6 +6,7 @@ use std::{
 };
 
 use chrono::Utc;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_backend::{
@@ -14,8 +14,10 @@ use pixi_build_backend::{
     protocol::{Protocol, ProtocolFactory},
     utils::TemporaryRenderedRecipe,
     variants::can_be_used_as_variant,
+    AnyVersion, TargetExt,
 };
 use pixi_build_types::{
+    self as pbt,
     procedures::{
         conda_build::{CondaBuildParams, CondaBuildResult, CondaBuiltPackage},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
@@ -24,8 +26,7 @@ use pixi_build_types::{
     },
     BackendCapabilities, CondaPackageMetadata, FrontendCapabilities, PlatformAndVirtualPackages,
 };
-use pixi_manifest::{Dependencies, Manifest, PackageManifest, SpecType};
-use pixi_spec::PixiSpec;
+use pixi_manifest::Manifest;
 use rattler_build::{
     build::run_build,
     console_utils::LoggingOutputHandler,
@@ -59,7 +60,7 @@ pub struct CMakeBuildBackend {
     logging_output_handler: LoggingOutputHandler,
     manifest_path: PathBuf,
     manifest_root: PathBuf,
-    package_manifest: PackageManifest,
+    project_model: pbt::ProjectModelV1,
     _config: CMakeBackendConfig,
     cache_dir: Option<PathBuf>,
 }
@@ -79,6 +80,7 @@ impl CMakeBuildBackend {
     /// at the given path.
     pub fn new(
         manifest_path: &Path,
+        project_model: pbt::VersionedProjectModel,
         config: Option<CMakeBackendConfig>,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
@@ -95,10 +97,6 @@ impl CMakeBuildBackend {
             .ok_or_else(|| miette::miette!("the project manifest must reside in a directory"))?
             .to_path_buf();
 
-        let Some(package_manifest) = manifest.package else {
-            return Err(miette::miette!("no package manifest found in the manifest"));
-        };
-
         // Read config from the manifest itself if its not provided
         // TODO: I guess this should also be passed over the protocol.
         let config = match config {
@@ -106,10 +104,14 @@ impl CMakeBuildBackend {
             None => CMakeBackendConfig::from_path(manifest_path)?,
         };
 
+        let v1 = project_model
+            .into_v1()
+            .ok_or_else(|| miette::miette!("project model v1 is required"))?;
+
         Ok(Self {
             manifest_path: manifest.path,
             manifest_root,
-            package_manifest,
+            project_model: v1,
             _config: config,
             logging_output_handler,
             cache_dir,
@@ -139,41 +141,38 @@ impl CMakeBuildBackend {
         let mut requirements = Requirements::default();
 
         let targets = self
-            .package_manifest
+            .project_model
             .targets
             .resolve(Some(host_platform))
             .collect_vec();
 
-        let run_dependencies = Dependencies::from(
-            targets
-                .iter()
-                .filter_map(|f| f.dependencies(SpecType::Run).cloned().map(Cow::Owned)),
-        );
+        let run_dependencies = targets
+            .iter()
+            .flat_map(|t| t.run_dependencies.iter())
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
-        let mut build_dependencies = Dependencies::from(
-            targets
-                .iter()
-                .filter_map(|f| f.dependencies(SpecType::Build).cloned().map(Cow::Owned)),
-        );
+        let host_dependencies = targets
+            .iter()
+            .flat_map(|t| t.host_dependencies.iter())
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
-        let host_dependencies = Dependencies::from(
-            targets
-                .iter()
-                .filter_map(|f| f.dependencies(SpecType::Host).cloned().map(Cow::Owned)),
+        let mut build_dependencies = targets
+            .iter()
+            .flat_map(|t| t.build_dependencies.iter())
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>(
         );
 
         // Ensure build tools are available in the build dependencies section.
-        for pkg_name in ["cmake", "ninja"] {
+        let build_tools = ["cmake".to_string(), "ninja".to_string()];
+        let any = pbt::PackageSpecV1::any();
+        for pkg_name in build_tools.iter() {
             if build_dependencies.contains_key(pkg_name) {
                 // If the host dependencies already contain the package, we don't need to add it
                 // again.
                 continue;
             }
 
-            build_dependencies.insert(
-                PackageName::from_str(pkg_name).unwrap(),
-                PixiSpec::default(),
-            );
+            build_dependencies.insert(pkg_name, &any);
         }
 
         requirements.build = extract_dependencies(channel_config, build_dependencies, variant)?;
@@ -225,8 +224,9 @@ impl CMakeBuildBackend {
         variant: &BTreeMap<NormalizedKey, String>,
     ) -> miette::Result<Recipe> {
         // Parse the package name from the manifest
-        let package = &self.package_manifest.package;
-        let name = PackageName::from_str(&package.name).into_diagnostic()?;
+        let project_model = &self.project_model;
+
+        let name = PackageName::from_str(&project_model.name).into_diagnostic()?;
 
         let noarch_type = NoArchType::none();
 
@@ -248,7 +248,7 @@ impl CMakeBuildBackend {
             schema_version: 1,
             context: Default::default(),
             package: Package {
-                version: package.version.clone().into(),
+                version: self.project_model.version.clone().into(),
                 name,
             },
             cache: None,
@@ -303,7 +303,7 @@ impl CMakeBuildBackend {
         variant: BTreeMap<NormalizedKey, String>,
     ) -> miette::Result<BuildConfiguration> {
         // Parse the package name from the manifest
-        let name = self.package_manifest.package.name.clone();
+        let name = self.project_model.name.clone();
         let name = PackageName::from_str(&name).into_diagnostic()?;
         // TODO: Setup defaults
         std::fs::create_dir_all(work_directory)
@@ -423,12 +423,17 @@ impl Protocol for CMakeBuildBackend {
 
         // Determine the variant keys that are used in the recipe.
         let used_variants = self
-            .package_manifest
+            .project_model
             .targets
             .resolve(Some(host_platform))
-            .flat_map(|dep| dep.dependencies.values().flatten())
+            .flat_map(|dep| {
+                dep.build_dependencies
+                    .iter()
+                    .chain(dep.run_dependencies.iter())
+                    .chain(dep.host_dependencies.iter())
+            })
             .filter(|(_, spec)| can_be_used_as_variant(spec))
-            .map(|(name, _)| name.into())
+            .map(|(name, _)| name.clone().into())
             .collect();
 
         // Determine the combinations of the used variants.
@@ -617,6 +622,9 @@ impl ProtocolFactory for CMakeBuildBackendFactory {
     ) -> miette::Result<(Self::Protocol, InitializeResult)> {
         let instance = CMakeBuildBackend::new(
             params.manifest_path.as_path(),
+            params
+                .project_model
+                .ok_or_else(|| miette::miette!("project model is required"))?,
             None,
             self.logging_output_handler.clone(),
             params.cache_directory,
@@ -637,6 +645,7 @@ impl ProtocolFactory for CMakeBuildBackendFactory {
 mod tests {
     use std::{collections::BTreeMap, path::PathBuf};
 
+    use pixi_build_type_conversions::to_project_model_v1;
     use pixi_manifest::Manifest;
     use rattler_build::console_utils::LoggingOutputHandler;
     use rattler_conda_types::{ChannelConfig, Platform};
@@ -679,9 +688,12 @@ mod tests {
         std::fs::write(&tmp_manifest, package_with_host_and_build_deps).unwrap();
 
         let manifest = Manifest::from_str(&tmp_manifest, package_with_host_and_build_deps).unwrap();
-
+        let package = manifest.package.unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf());
+        let project_model = to_project_model_v1(&package, &channel_config).unwrap();
         let cmake_backend = CMakeBuildBackend::new(
             &manifest.path,
+            project_model,
             Some(CMakeBackendConfig::default()),
             LoggingOutputHandler::default(),
             None,

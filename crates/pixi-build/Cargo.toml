@@ -30,6 +30,7 @@ tokio = { workspace = true, features = ["macros"] }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
 pyproject-toml = { workspace = true }
+dirs = { workspace = true }
 
 pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }

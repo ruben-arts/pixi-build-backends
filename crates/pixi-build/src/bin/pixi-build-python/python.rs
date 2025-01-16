@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::BTreeMap,
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -16,20 +15,19 @@ use pixi_build_backend::{
     protocol::{Protocol, ProtocolFactory},
     utils::TemporaryRenderedRecipe,
     variants::can_be_used_as_variant,
-    TargetExt,
+    AnyVersion, TargetExt,
 };
 use pixi_build_types::{
+    self as pbt,
     procedures::{
         conda_build::{CondaBuildParams, CondaBuildResult, CondaBuiltPackage},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
-    BackendCapabilities, CondaPackageMetadata, FrontendCapabilities, PixiSpecV1,
-    PlatformAndVirtualPackages, ProjectModelV1, SourcePackageName, VersionedProjectModel,
+    BackendCapabilities, CondaPackageMetadata, FrontendCapabilities, PlatformAndVirtualPackages,
 };
-use pixi_manifest::{Dependencies, Manifest, SpecType};
-use pixi_spec::PixiSpec;
+use pixi_manifest::Manifest;
 use pyproject_toml::PyProjectToml;
 use rattler_build::{
     build::run_build,
@@ -66,7 +64,7 @@ pub struct PythonBuildBackend {
     logging_output_handler: LoggingOutputHandler,
     manifest_path: PathBuf,
     manifest_root: PathBuf,
-    project_model: ProjectModelV1,
+    project_model: pbt::ProjectModelV1,
     config: PythonBackendConfig,
     cache_dir: Option<PathBuf>,
     pyproject_manifest: Option<PyProjectToml>,
@@ -87,7 +85,7 @@ impl PythonBuildBackend {
     /// at the given path.
     pub fn new(
         manifest_path: &Path,
-        project_model: VersionedProjectModel,
+        project_model: pbt::VersionedProjectModel,
         config: Option<PythonBackendConfig>,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
@@ -128,7 +126,7 @@ impl PythonBuildBackend {
 
         let v1 = project_model
             .into_v1()
-            .ok_or_else(|| miette::miette!("project model is required"))?;
+            .ok_or_else(|| miette::miette!("project model v1 is required"))?;
 
         Ok(Self {
             manifest_path: manifest.path,
@@ -169,59 +167,44 @@ impl PythonBuildBackend {
             .resolve(Some(host_platform))
             .collect_vec();
 
-        // let run_dependencies = Dependencies::from(
-        //     targets
-        //         .iter()
-        //         .filter_map(|f| f.dependencies(SpecType::Run).cloned().map(Cow::Owned)),
-        // );
-
-        // let build_dependencies = Dependencies::from(
-        //     targets
-        //         .iter()
-        //         .filter_map(|f| f.dependencies(SpecType::Build).cloned().map(Cow::Owned)),
-        // );
-
-        // let mut host_dependencies = Dependencies::from(
-        //     targets
-        //         .iter()
-        //         .filter_map(|f| f.dependencies(SpecType::Host).cloned().map(Cow::Owned)),
-        // );
-
         let run_dependencies = targets
             .iter()
             .flat_map(|t| t.run_dependencies.iter())
-            .collect::<IndexMap<&SourcePackageName, &PixiSpecV1>>();
-        let host_dependencies = targets
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
+
+        let mut host_dependencies = targets
             .iter()
-            .flat_map(|t| t.run_dependencies.iter())
-            .collect::<IndexMap<&SourcePackageName, &PixiSpecV1>>();
+            .flat_map(|t| t.host_dependencies.iter())
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
+
         let build_dependencies = targets
             .iter()
-            .flat_map(|t| t.run_dependencies.iter())
-            .collect::<IndexMap<&SourcePackageName, &PixiSpecV1>>();
+            .flat_map(|t| t.build_dependencies.iter())
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
+        let uv = "uv".to_string();
         // Determine the installer to use
-        let installer = if host_dependencies.contains_key("uv")
-            || run_dependencies.contains_key("uv")
-            || build_dependencies.contains_key("uv")
+        let installer = if host_dependencies.contains_key(&uv)
+            || run_dependencies.contains_key(&uv)
+            || build_dependencies.contains_key(&uv)
         {
             Installer::Uv
         } else {
             Installer::Pip
         };
 
+        let any = pbt::PackageSpecV1::any();
+
         // Ensure python and pip/uv are available in the host dependencies section.
-        for pkg_name in [installer.package_name(), "python"] {
-            if host_dependencies.contains_key(pkg_name) {
+        let installers = [installer.package_name().to_string(), "python".to_string()];
+        for pkg_name in installers.iter() {
+            if host_dependencies.contains_key(&pkg_name) {
                 // If the host dependencies already contain the package,
                 // we don't need to add it again.
                 continue;
             }
 
-            host_dependencies.insert(
-                PackageName::from_str(pkg_name).unwrap(),
-                PixiSpec::default(),
-            );
+            host_dependencies.insert(&pkg_name, &any);
         }
 
         requirements.build = extract_dependencies(channel_config, build_dependencies, variant)?;
@@ -505,12 +488,17 @@ impl Protocol for PythonBuildBackend {
 
         // Determine the variant keys that are used in the recipe.
         let used_variants = self
-            .package_manifest
+            .project_model
             .targets
             .resolve(Some(host_platform))
-            .flat_map(|dep| dep.dependencies.values().flatten())
+            .flat_map(|dep| {
+                dep.build_dependencies
+                    .iter()
+                    .chain(dep.run_dependencies.iter())
+                    .chain(dep.host_dependencies.iter())
+            })
             .filter(|(_, spec)| can_be_used_as_variant(spec))
-            .map(|(name, _)| name.into())
+            .map(|(name, _)| name.clone().into())
             .collect();
 
         // Determine the combinations of the used variants.
@@ -726,7 +714,8 @@ mod tests {
         std::fs::write(&tmp_manifest, manifest_source).unwrap();
         let manifest = pixi_manifest::Manifest::from_path(&tmp_manifest).unwrap();
         let package = manifest.package.unwrap();
-        let project_model = to_project_model_v1(&package);
+        let channel_config = ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf());
+        let project_model = to_project_model_v1(&package, &channel_config).unwrap();
 
         let python_backend = PythonBuildBackend::new(
             &tmp_manifest,
@@ -737,7 +726,6 @@ mod tests {
         )
         .unwrap();
 
-        let channel_config = ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf());
         python_backend
             .recipe(
                 Platform::current(),
@@ -823,7 +811,9 @@ mod tests {
         std::fs::write(&tmp_manifest, package_with_host_and_build_deps).unwrap();
 
         let manifest = Manifest::from_str(&tmp_manifest, package_with_host_and_build_deps).unwrap();
-        let project_model = to_project_model_v1(&manifest.package.unwrap());
+        let channel_config = ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf());
+        let project_model =
+            to_project_model_v1(&manifest.package.unwrap(), &channel_config).unwrap();
         let python_backend = PythonBuildBackend::new(
             &manifest.path,
             project_model,

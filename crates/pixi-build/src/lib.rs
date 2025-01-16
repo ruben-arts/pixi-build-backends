@@ -10,4 +10,4 @@ pub mod tools;
 pub mod utils;
 pub mod variants;
 
-pub use build_types_ext::{TargetExt, TargetSelectorExt};
+pub use build_types_ext::{AnyVersion, TargetExt, TargetSelectorExt};

@@ -1,21 +1,38 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use itertools::Either;
 use miette::{Context, IntoDiagnostic};
-use pixi_manifest::{CondaDependencies, Dependencies};
-use pixi_spec::{PixiSpec, SourceSpec};
+use pixi_build_types as pbt;
 use rattler_build::{recipe::parser::Dependency, NormalizedKey};
 use rattler_conda_types::{
     ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness::Strict,
 };
 
-use crate::variants::can_be_used_as_variant;
+use crate::{build_types_ext::BinarySpecExt, variants::can_be_used_as_variant};
 
 /// A helper struct to extract match specs from a manifest.
 pub struct MatchspecExtractor<'a> {
     channel_config: &'a ChannelConfig,
     variant: Option<&'a BTreeMap<NormalizedKey, String>>,
     ignore_self: bool,
+}
+
+/// Resolves the path relative to `root_dir`. If the path is absolute,
+/// it is returned verbatim.
+///
+/// May return an error if the path is prefixed with `~` and the home
+/// directory is undefined.
+fn resolve_path(path: &Path, root_dir: impl AsRef<Path>) -> Option<PathBuf> {
+    if path.is_absolute() {
+        Some(PathBuf::from(path))
+    } else if let Ok(user_path) = path.strip_prefix("~/") {
+        dirs::home_dir().map(|h| h.join(user_path))
+    } else {
+        Some(root_dir.as_ref().join(path))
+    }
 }
 
 impl<'a> MatchspecExtractor<'a> {
@@ -45,10 +62,14 @@ impl<'a> MatchspecExtractor<'a> {
     }
 
     /// Extracts match specs from the given set of dependencies.
-    pub fn extract(&self, dependencies: CondaDependencies) -> miette::Result<Vec<MatchSpec>> {
+    pub fn extract<'b>(
+        &self,
+        dependencies: impl IntoIterator<Item = (&'b pbt::SourcePackageName, &'b pbt::PackageSpecV1)>,
+    ) -> miette::Result<Vec<MatchSpec>> {
         let root_dir = &self.channel_config.root_dir;
         let mut specs = Vec::new();
-        for (name, spec) in dependencies.into_specs() {
+        for (name, spec) in dependencies.into_iter() {
+            let name = PackageName::from_str(name.as_str()).into_diagnostic()?;
             // If we have a variant override, we should use that instead of the spec.
             if can_be_used_as_variant(&spec) {
                 if let Some(variant_value) = self
@@ -64,36 +85,48 @@ impl<'a> MatchspecExtractor<'a> {
                 }
             }
 
-            let source_or_binary = spec.into_source_or_binary();
-            let match_spec = match source_or_binary {
-                Either::Left(SourceSpec::Path(path))
-                    if self.ignore_self
-                        && path
-                            .resolve(root_dir)
-                            .map_or(false, |path| path.as_path() == root_dir) =>
-                {
-                    // Skip source dependencies that point to the root directory. That would
-                    // be a self reference.
-                    continue;
-                }
-                Either::Left(_) => {
-                    // All other source dependencies are not yet supported.
-                    return Err(miette::miette!(
-                        "recursive source dependencies are not yet supported"
-                    ));
-                }
-                Either::Right(binary) => {
-                    let nameless_spec = binary
-                        .try_into_nameless_match_spec(self.channel_config)
-                        .into_diagnostic()?;
-                    if nameless_spec.version == Some("*".parse().unwrap()) {
+            // Match on supported packages
+            let match_spec = match spec {
+                pbt::PackageSpecV1::Binary(binary_spec) => {
+                    let match_spec = if binary_spec.version == Some("*".parse().unwrap()) {
                         // Skip dependencies with wildcard versions.
-                        name.as_normalized().to_string().parse().unwrap()
+                        name.as_normalized()
+                            .to_string()
+                            .parse::<MatchSpec>()
+                            .into_diagnostic()
                     } else {
-                        MatchSpec::from_nameless(nameless_spec, Some(name))
-                    }
+                        Ok(MatchSpec::from_nameless(
+                            binary_spec.to_nameless(),
+                            Some(name),
+                        ))
+                    };
+                    match_spec
                 }
-            };
+                pbt::PackageSpecV1::Source(source_spec) => match source_spec {
+                    pbt::SourcePackageSpecV1::Path(path) => {
+                        let path =
+                            resolve_path(&Path::new(&path.path), root_dir).ok_or_else(|| {
+                                miette::miette!("failed to resolve home dir for: {}", path.path)
+                            })?;
+                        if self.ignore_self && path.as_path() == root_dir.as_path() {
+                            // Skip source dependencies that point to the root directory. That would
+                            // be a self reference.
+                            continue;
+                        } else {
+                            // All other source dependencies are not yet supported.
+                            return Err(miette::miette!(
+                                "recursive source dependencies are not yet supported"
+                            ));
+                        }
+                    }
+                    _ => {
+                        // All other source dependencies are not yet supported.
+                        return Err(miette::miette!(
+                            "recursive source dependencies are not yet supported"
+                        ));
+                    }
+                },
+            }?;
 
             specs.push(match_spec);
         }
@@ -102,9 +135,9 @@ impl<'a> MatchspecExtractor<'a> {
     }
 }
 
-pub fn extract_dependencies(
+pub fn extract_dependencies<'a>(
     channel_config: &ChannelConfig,
-    dependencies: Dependencies<PackageName, PixiSpec>,
+    dependencies: impl IntoIterator<Item = (&'a pbt::SourcePackageName, &'a pbt::PackageSpecV1)>,
     variant: &BTreeMap<NormalizedKey, String>,
 ) -> miette::Result<Vec<Dependency>> {
     Ok(MatchspecExtractor::new(channel_config)

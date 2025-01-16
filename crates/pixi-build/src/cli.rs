@@ -124,12 +124,18 @@ pub async fn main<T: ProtocolFactory, F: FnOnce(LoggingOutputHandler) -> T>(
 }
 
 /// Convert manifest to project model
-fn project_model_v1(manifest_path: &Path) -> miette::Result<Option<VersionedProjectModel>> {
+fn project_model_v1(
+    manifest_path: &Path,
+    channel_config: &ChannelConfig,
+) -> miette::Result<Option<VersionedProjectModel>> {
     // Load the manifest
     let manifest = pixi_manifest::Manifest::from_path(manifest_path)?;
     let package = manifest.package;
     // This can be null in the rattler-build backend
-    Ok(package.map(|manifest| to_project_model_v1(&manifest)))
+    Ok(package.map(|manifest| {
+        to_project_model_v1(&manifest, channel_config)
+            .expect("failed to convert manifest to project model")
+    }))
 }
 
 /// Negotiate the capabilities of the backend and initalize the backend.
@@ -139,7 +145,13 @@ async fn initalize<T: ProtocolFactory>(
 ) -> miette::Result<T::Protocol> {
     // Negotiate the capabilities of the backend.
     let capabilites = capabilities::<T>().await?;
-    let project_model = project_model_v1(manifest_path)?;
+    let channel_config = ChannelConfig::default_with_root_dir(
+        manifest_path
+            .parent()
+            .expect("manifest should always reside in a directory")
+            .to_path_buf(),
+    );
+    let project_model = project_model_v1(manifest_path, &channel_config)?;
 
     // Check if the project model is required
     // and if it is not present, return an error.
