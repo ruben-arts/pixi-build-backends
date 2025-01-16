@@ -28,7 +28,6 @@ use pixi_build_types::{
     },
     BackendCapabilities, CondaPackageMetadata, FrontendCapabilities, PlatformAndVirtualPackages,
 };
-use pixi_manifest::Manifest;
 use rattler_build::{
     build::run_build,
     console_utils::LoggingOutputHandler,
@@ -87,14 +86,8 @@ impl CMakeBuildBackend {
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
     ) -> miette::Result<Self> {
-        // Load the manifest from the source directory
-        let manifest = Manifest::from_path(manifest_path).with_context(|| {
-            format!("failed to parse manifest from {}", manifest_path.display())
-        })?;
-
         // Determine the root directory of the manifest
-        let manifest_root = manifest
-            .path
+        let manifest_root = manifest_path
             .parent()
             .ok_or_else(|| miette::miette!("the project manifest must reside in a directory"))?
             .to_path_buf();
@@ -111,7 +104,7 @@ impl CMakeBuildBackend {
             .ok_or_else(|| miette::miette!("project model v1 is required"))?;
 
         Ok(Self {
-            manifest_path: manifest.path,
+            manifest_path: manifest_path.to_path_buf(),
             manifest_root,
             project_model: v1,
             _config: config,
