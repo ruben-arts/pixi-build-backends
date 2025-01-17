@@ -1,4 +1,4 @@
-//! This module mimics some of the functions find in pixi that works with the data types
+//! This module mimics some of the functions found in pixi that works with the data types
 //! there but work with the project model types instead.
 //!
 //! This makes it easier when devoloping new backends that need to work with the project model.
