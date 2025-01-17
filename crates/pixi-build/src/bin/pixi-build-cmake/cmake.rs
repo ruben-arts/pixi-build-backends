@@ -81,8 +81,8 @@ impl CMakeBuildBackend {
     /// at the given path.
     pub fn new(
         manifest_path: &Path,
-        project_model: pbt::VersionedProjectModel,
-        config: Option<CMakeBackendConfig>,
+        project_model: pbt::ProjectModelV1,
+        config: CMakeBackendConfig,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
     ) -> miette::Result<Self> {
@@ -92,21 +92,10 @@ impl CMakeBuildBackend {
             .ok_or_else(|| miette::miette!("the project manifest must reside in a directory"))?
             .to_path_buf();
 
-        // Read config from the manifest itself if its not provided
-        // TODO: I guess this should also be passed over the protocol.
-        let config = match config {
-            Some(config) => config,
-            None => CMakeBackendConfig::from_path(manifest_path)?,
-        };
-
-        let v1 = project_model
-            .into_v1()
-            .ok_or_else(|| miette::miette!("project model v1 is required"))?;
-
         Ok(Self {
             manifest_path: manifest_path.to_path_buf(),
             manifest_root,
-            project_model: v1,
+            project_model,
             _config: config,
             logging_output_handler,
             cache_dir,
@@ -138,24 +127,27 @@ impl CMakeBuildBackend {
         let targets = self
             .project_model
             .targets
-            .resolve(Some(host_platform))
+            .iter()
+            .flat_map(|targets| targets.resolve(Some(host_platform)))
             .collect_vec();
 
         let run_dependencies = targets
             .iter()
             .flat_map(|t| t.run_dependencies.iter())
+            .flatten()
             .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
         let host_dependencies = targets
             .iter()
             .flat_map(|t| t.host_dependencies.iter())
+            .flatten()
             .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
         let mut build_dependencies = targets
             .iter()
             .flat_map(|t| t.build_dependencies.iter())
-            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>(
-        );
+            .flatten()
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
         // Ensure build tools are available in the build dependencies section.
         let build_tools = ["cmake".to_string(), "ninja".to_string()];
@@ -372,12 +364,14 @@ impl CMakeBuildBackend {
         let used_variants = self
             .project_model
             .targets
-            .resolve(Some(host_platform))
+            .iter()
+            .flat_map(|target| target.resolve(Some(host_platform)))
             .flat_map(|dep| {
                 dep.build_dependencies
                     .iter()
-                    .chain(dep.run_dependencies.iter())
-                    .chain(dep.host_dependencies.iter())
+                    .flatten()
+                    .chain(dep.run_dependencies.iter().flatten())
+                    .chain(dep.host_dependencies.iter().flatten())
             })
             .filter(|(_, spec)| can_be_used_as_variant(spec))
             .map(|(name, _)| name.clone().into())
@@ -688,12 +682,26 @@ impl ProtocolFactory for CMakeBuildBackendFactory {
         &self,
         params: InitializeParams,
     ) -> miette::Result<(Self::Protocol, InitializeResult)> {
+        let project_model = params
+            .project_model
+            .ok_or_else(|| miette::miette!("project model is required"))?;
+
+        let project_model = project_model
+            .into_v1()
+            .ok_or_else(|| miette::miette!("project model v1 is required"))?;
+
+        let config = if let Some(config) = params.configuration {
+            serde_json::from_value(config)
+                .into_diagnostic()
+                .context("failed to parse configuration")?
+        } else {
+            CMakeBackendConfig::default()
+        };
+
         let instance = CMakeBuildBackend::new(
             params.manifest_path.as_path(),
-            params
-                .project_model
-                .ok_or_else(|| miette::miette!("project model is required"))?,
-            None,
+            project_model,
+            config,
             self.logging_output_handler.clone(),
             params.cache_directory,
         )?;
@@ -762,7 +770,7 @@ mod tests {
         let cmake_backend = CMakeBuildBackend::new(
             &manifest.path,
             project_model,
-            Some(CMakeBackendConfig::default()),
+            CMakeBackendConfig::default(),
             LoggingOutputHandler::default(),
             None,
         )

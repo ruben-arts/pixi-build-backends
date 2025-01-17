@@ -12,7 +12,7 @@ use pixi_build_types::{
         negotiate_capabilities::NegotiateCapabilitiesParams,
     },
     BackendCapabilities, ChannelConfiguration, FrontendCapabilities, PlatformAndVirtualPackages,
-    VersionedProjectModel,
+    ProjectModelV1,
 };
 use rattler_build::console_utils::{get_default_env_filter, LoggingOutputHandler};
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
@@ -127,7 +127,7 @@ pub async fn main<T: ProtocolFactory, F: FnOnce(LoggingOutputHandler) -> T>(
 fn project_model_v1(
     manifest_path: &Path,
     channel_config: &ChannelConfig,
-) -> miette::Result<Option<VersionedProjectModel>> {
+) -> miette::Result<Option<ProjectModelV1>> {
     // Load the manifest
     let manifest = pixi_manifest::Manifest::from_path(manifest_path)?;
     let package = manifest.package;
@@ -166,8 +166,9 @@ async fn initialize<T: ProtocolFactory>(
     let (protocol, _initialize_result) = factory
         .initialize(InitializeParams {
             manifest_path: manifest_path.to_path_buf(),
-            project_model,
+            project_model: project_model.map(Into::into),
             cache_directory: None,
+            configuration: None,
         })
         .await?;
     Ok(protocol)

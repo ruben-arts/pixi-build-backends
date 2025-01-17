@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     ffi::OsStr,
-    path::{Path, PathBuf},
+    path::PathBuf,
     str::FromStr,
     sync::Arc,
 };
@@ -28,6 +28,7 @@ use pixi_build_types::{
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
     BackendCapabilities, CondaPackageMetadata, FrontendCapabilities, PlatformAndVirtualPackages,
+    ProjectModelV1,
 };
 use pyproject_toml::PyProjectToml;
 use rattler_build::{
@@ -85,9 +86,9 @@ impl PythonBuildBackend {
     /// Returns a new instance of [`PythonBuildBackend`] by reading the manifest
     /// at the given path.
     pub fn new(
-        manifest_path: &Path,
-        project_model: pbt::VersionedProjectModel,
-        config: Option<PythonBackendConfig>,
+        manifest_path: PathBuf,
+        project_model: ProjectModelV1,
+        config: PythonBackendConfig,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
     ) -> miette::Result<Self> {
@@ -97,13 +98,6 @@ impl PythonBuildBackend {
             .ok_or_else(|| miette::miette!("the project manifest must reside in a directory"))?
             .to_path_buf();
 
-        // Read config from the manifest itself if its not provided
-        // TODO: I guess this should also be passed over the protocol.
-        let config = match config {
-            Some(config) => config,
-            None => PythonBackendConfig::from_path(manifest_path)?,
-        };
-
         let pyproject_manifest = if manifest_path
             .file_name()
             .and_then(OsStr::to_str)
@@ -111,7 +105,7 @@ impl PythonBuildBackend {
             == Some("pyproject.toml".to_string())
         {
             // Load the manifest as a pyproject
-            let contents = fs_err::read_to_string(manifest_path).into_diagnostic()?;
+            let contents = fs_err::read_to_string(&manifest_path).into_diagnostic()?;
 
             // Load the manifest as a pyproject
             Some(toml_edit::de::from_str(&contents).into_diagnostic()?)
@@ -119,14 +113,10 @@ impl PythonBuildBackend {
             None
         };
 
-        let v1 = project_model
-            .into_v1()
-            .ok_or_else(|| miette::miette!("project model v1 is required"))?;
-
         Ok(Self {
-            manifest_path: manifest_path.to_path_buf(),
+            manifest_path,
             manifest_root,
-            project_model: v1,
+            project_model,
             config,
             logging_output_handler,
             cache_dir,
@@ -159,22 +149,26 @@ impl PythonBuildBackend {
         let targets = self
             .project_model
             .targets
-            .resolve(Some(host_platform))
+            .iter()
+            .flat_map(|targets| targets.resolve(Some(host_platform)))
             .collect_vec();
 
         let run_dependencies = targets
             .iter()
             .flat_map(|t| t.run_dependencies.iter())
+            .flatten()
             .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
         let mut host_dependencies = targets
             .iter()
             .flat_map(|t| t.host_dependencies.iter())
+            .flatten()
             .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
         let build_dependencies = targets
             .iter()
             .flat_map(|t| t.build_dependencies.iter())
+            .flatten()
             .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpecV1>>();
 
         let uv = "uv".to_string();
@@ -422,12 +416,14 @@ impl PythonBuildBackend {
         let used_variants = self
             .project_model
             .targets
-            .resolve(Some(host_platform))
+            .iter()
+            .flat_map(|target| target.resolve(Some(host_platform)))
             .flat_map(|dep| {
                 dep.build_dependencies
                     .iter()
-                    .chain(dep.run_dependencies.iter())
-                    .chain(dep.host_dependencies.iter())
+                    .flatten()
+                    .chain(dep.run_dependencies.iter().flatten())
+                    .chain(dep.host_dependencies.iter().flatten())
             })
             .filter(|(_, spec)| can_be_used_as_variant(spec))
             .map(|(name, _)| name.clone().into())
@@ -541,12 +537,14 @@ impl Protocol for PythonBuildBackend {
         let used_variants = self
             .project_model
             .targets
-            .resolve(Some(host_platform))
+            .iter()
+            .flat_map(|target| target.resolve(Some(host_platform)))
             .flat_map(|dep| {
                 dep.build_dependencies
                     .iter()
-                    .chain(dep.run_dependencies.iter())
-                    .chain(dep.host_dependencies.iter())
+                    .flatten()
+                    .chain(dep.run_dependencies.iter().flatten())
+                    .chain(dep.host_dependencies.iter().flatten())
             })
             .filter(|(_, spec)| can_be_used_as_variant(spec))
             .map(|(name, _)| name.clone().into())
@@ -795,12 +793,26 @@ impl ProtocolFactory for PythonBuildBackendFactory {
         &self,
         params: InitializeParams,
     ) -> miette::Result<(Self::Protocol, InitializeResult)> {
+        let project_model = params
+            .project_model
+            .ok_or_else(|| miette::miette!("project model is required"))?;
+
+        let project_model = project_model
+            .into_v1()
+            .ok_or_else(|| miette::miette!("project model v1 is required"))?;
+
+        let config = if let Some(config) = params.configuration {
+            serde_json::from_value(config)
+                .into_diagnostic()
+                .context("failed to parse configuration")?
+        } else {
+            PythonBackendConfig::default()
+        };
+
         let instance = PythonBuildBackend::new(
-            params.manifest_path.as_path(),
-            params
-                .project_model
-                .ok_or_else(|| miette::miette!("project model is required"))?,
-            None,
+            params.manifest_path,
+            project_model,
+            config,
             self.logging_output_handler.clone(),
             params.cache_directory,
         )?;
@@ -839,9 +851,9 @@ mod tests {
         let project_model = to_project_model_v1(&package, &channel_config).unwrap();
 
         let python_backend = PythonBuildBackend::new(
-            &tmp_manifest,
+            tmp_manifest,
             project_model,
-            Some(config),
+            config,
             LoggingOutputHandler::default(),
             None,
         )
@@ -936,9 +948,9 @@ mod tests {
         let project_model =
             to_project_model_v1(&manifest.package.unwrap(), &channel_config).unwrap();
         let python_backend = PythonBuildBackend::new(
-            &manifest.path,
+            manifest.path,
             project_model,
-            Some(PythonBackendConfig::default()),
+            PythonBackendConfig::default(),
             LoggingOutputHandler::default(),
             None,
         )

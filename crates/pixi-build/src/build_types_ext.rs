@@ -21,7 +21,7 @@ pub trait TargetExt<'a> {
     type Target: 'a;
 
     /// Returns the default target.
-    fn default_target(&self) -> &Self::Target;
+    fn default_target(&self) -> Option<&Self::Target>;
 
     /// Returns all targets
     fn targets(&'a self) -> impl Iterator<Item = (&'a Self::Selector, &'a Self::Target)>;
@@ -29,18 +29,19 @@ pub trait TargetExt<'a> {
     /// Resolve the target for the given platform.
     fn resolve(&'a self, platform: Option<Platform>) -> impl Iterator<Item = &'a Self::Target> {
         if let Some(platform) = platform {
-            let iter = std::iter::once(self.default_target()).chain(self.targets().filter_map(
-                move |(selector, target)| {
+            let iter = self
+                .default_target()
+                .into_iter()
+                .chain(self.targets().filter_map(move |(selector, target)| {
                     if selector.matches(platform) {
                         Some(target)
                     } else {
                         None
                     }
-                },
-            ));
+                }));
             Either::Right(iter)
         } else {
-            Either::Left(std::iter::once(self.default_target()))
+            Either::Left(self.default_target().into_iter())
         }
     }
 }
@@ -91,12 +92,12 @@ impl<'a> TargetExt<'a> for pbt::TargetsV1 {
     type Selector = pbt::TargetSelectorV1;
     type Target = pbt::TargetV1;
 
-    fn default_target(&self) -> &pbt::TargetV1 {
-        &self.default_target
+    fn default_target(&self) -> Option<&pbt::TargetV1> {
+        self.default_target.as_ref()
     }
 
     fn targets(&'a self) -> impl Iterator<Item = (&'a pbt::TargetSelectorV1, &'a pbt::TargetV1)> {
-        self.targets.iter()
+        self.targets.iter().flatten()
     }
 }
 

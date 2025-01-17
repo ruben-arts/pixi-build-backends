@@ -431,6 +431,7 @@ mod tests {
             .initialize(InitializeParams {
                 manifest_path: recipe,
                 project_model: None,
+                configuration: None,
                 cache_directory: None,
             })
             .await
@@ -466,6 +467,7 @@ mod tests {
             .initialize(InitializeParams {
                 manifest_path: recipe,
                 project_model: None,
+                configuration: None,
                 cache_directory: None,
             })
             .await
@@ -506,6 +508,7 @@ mod tests {
             .initialize(InitializeParams {
                 project_model: None,
                 manifest_path: manifest_path.as_ref().to_path_buf(),
+                configuration: None,
                 cache_directory: None,
             })
             .await
