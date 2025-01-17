@@ -1137,7 +1137,7 @@ dependencies = [
 [[package]]
 name = "fancy_display"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "console",
 ]
@@ -3121,7 +3121,7 @@ dependencies = [
 [[package]]
 name = "pixi_build_type_conversions"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "indexmap 2.7.0",
  "itertools 0.13.0",
@@ -3134,7 +3134,7 @@ dependencies = [
 [[package]]
 name = "pixi_build_types"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "indexmap 2.7.0",
  "rattler_conda_types",
@@ -3148,7 +3148,7 @@ dependencies = [
 [[package]]
 name = "pixi_config"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "clap",
  "console",
@@ -3173,7 +3173,7 @@ dependencies = [
 [[package]]
 name = "pixi_consts"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "console",
  "rattler_cache",
@@ -3184,7 +3184,7 @@ dependencies = [
 [[package]]
 name = "pixi_git"
 version = "0.0.1"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "dashmap",
  "dunce",
@@ -3205,7 +3205,7 @@ dependencies = [
 [[package]]
 name = "pixi_manifest"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "console",
  "dunce",
@@ -3238,7 +3238,7 @@ dependencies = [
 [[package]]
 name = "pixi_spec"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "dirs 5.0.1",
  "file_url",
@@ -3261,7 +3261,7 @@ dependencies = [
 [[package]]
 name = "pixi_toml"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "digest",
  "hex",
@@ -3274,7 +3274,7 @@ dependencies = [
 [[package]]
 name = "pixi_utils"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#a0f8317b047e38365140dd0a8b69579fe6900f1e"
+source = "git+https://github.com/baszalmstra/pixi?branch=fix/build_protocol_more#9bc3d8e65dd45e15dbcd1d3820362bc319a1b023"
 dependencies = [
  "async-fd-lock",
  "fs-err",

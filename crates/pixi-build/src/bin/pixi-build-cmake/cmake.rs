@@ -213,8 +213,10 @@ impl CMakeBuildBackend {
     ) -> miette::Result<Recipe> {
         // Parse the package name from the manifest
         let project_model = &self.project_model;
-
         let name = PackageName::from_str(&project_model.name).into_diagnostic()?;
+        let version = self.project_model.version.clone().ok_or_else(|| {
+            miette::miette!("a version is missing from the package but it is required")
+        })?;
 
         let noarch_type = NoArchType::none();
 
@@ -236,7 +238,7 @@ impl CMakeBuildBackend {
             schema_version: 1,
             context: Default::default(),
             package: Package {
-                version: self.project_model.version.clone().into(),
+                version: version.into(),
                 name,
             },
             cache: None,

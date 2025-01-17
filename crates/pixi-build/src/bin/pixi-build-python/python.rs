@@ -239,7 +239,9 @@ impl PythonBuildBackend {
     ) -> miette::Result<Recipe> {
         // Parse the package name and version from the manifest
         let name = PackageName::from_str(&self.project_model.name).into_diagnostic()?;
-        let version = self.project_model.version.clone();
+        let version = self.project_model.version.clone().ok_or_else(|| {
+            miette::miette!("a version is missing from the package but it is required")
+        })?;
 
         // Determine whether the package should be built as a noarch package or as a
         // generic package.
