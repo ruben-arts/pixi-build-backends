@@ -32,6 +32,7 @@ build:
         - export RUSTC_WRAPPER=sccache
         - export OPENSSL_DIR="$PREFIX"
         - cargo install --locked --root $PREFIX --path crates/pixi-build-rattler-build --no-track
+        - sccache --show-stats
       else:
         - cargo install --locked --root %PREFIX% --path crates/pixi-build-rattler-build --no-track
   files:
