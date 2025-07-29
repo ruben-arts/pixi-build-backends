@@ -14,7 +14,7 @@ from pixi_build_backend.types.platform import Platform
 from pixi_build_backend.types.project_model import ProjectModelV1
 from pixi_build_backend.types.python_params import PythonParams
 
-from .build_script import BuildScriptContext, Installer, BuildPlatform
+from .build_script import BuildScriptContext, BuildPlatform
 from .utils import extract_entry_points
 from .utils import read_pyproject_toml, get_build_input_globs, get_editable_setting
 
@@ -56,83 +56,61 @@ class ROSGenerator(GenerateRecipeProtocol):
         """Generate a recipe for a Python package."""
         backend_config: ROSBackendConfig = ROSBackendConfig(**config)
 
-        manifest_root = Path(manifest_path).parent
+        manifest_root = Path(manifest_path)
 
         # Read package.xml
-        package = read_package_xml(manifest_root)
+        package_xml_str = get_package_xml_content(manifest_root)
+        package_xml = convert_package_xml_to_catkin_package(package_xml_str)
+
+        name = package_xml.name
+        version = package_xml.version
+        description = package_xml.description or ""
+
+        # Get requirements from package.xml
+        package_requirements = package_xml_to_conda_requirements(package_xml, distro="noetic")
 
         # Create base recipe from model
         generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
 
         # Get recipe components
         recipe = generated_recipe.recipe
-        requirements = recipe.requirements
+        # recipe.package.name = name
+        # recipe.package.version = version
 
         # Resolve requirements for the host platform
-        resolved_requirements = requirements.resolve(host_platform)
+        # resolved_requirements = recipe.requirements.resolve(host_platform)
 
         # Merge package requirements into the host requirements
-        build_type = package.get_build_type()
-        name = package.name
-        version = package.version
-        group_depends = package.group_depends
-
-
-        # Determine installer (pip or uv)
-        installer = Installer.determine_installer(resolved_requirements.host)
-        installer_name = installer.package_name()
-
-        # Add installer to host requirements if not present
-        if installer_name not in resolved_requirements.host:
-            from pixi_build_backend.pixi_build_backend import PyItemPackageDependency
-            from pixi_build_backend.types.intermediate_recipe import ItemPackageDependency
-
-            inner_dep = PyItemPackageDependency(installer_name)
-            requirements.host.append(ItemPackageDependency._from_inner(inner_dep))
-
-        # Add python to both host and run requirements if not present
-        if "python" not in resolved_requirements.host:
-            from pixi_build_backend.pixi_build_backend import PyItemPackageDependency
-            from pixi_build_backend.types.intermediate_recipe import ItemPackageDependency
-
-            inner_dep = PyItemPackageDependency("python")
-            requirements.host.append(ItemPackageDependency._from_inner(inner_dep))
-        if "python" not in resolved_requirements.run:
-            from pixi_build_backend.pixi_build_backend import PyItemPackageDependency
-            from pixi_build_backend.types.intermediate_recipe import ItemPackageDependency
-
-            inner_dep = PyItemPackageDependency("python")
-            requirements.run.append(ItemPackageDependency._from_inner(inner_dep))
+        recipe.requirements.host.extend(package_requirements.host)
+        recipe.requirements.build.extend(package_requirements.build)
+        recipe.requirements.run.extend(package_requirements.run)
 
         # Determine build platform
         build_platform = BuildPlatform.current()
 
-        # Get editable setting
-        editable = get_editable_setting(python_params)
+        # Add standard dependencies
+        build = ["ninja", "python", "setuptools", "git", "git-lfs", "cmake", "cpython"]
+        # if build_platform.is_unix():
+        #     build.extend(["patch", "make", "coreutils"])
+        # if build_platform.is_windows():
+        #     build.extend(["m2-patch"])
+        # if build_platform.is_macos():
+        #     build.extend(["tapi"])        
+
+        for dep in build:
+            recipe.requirements.host.append(ItemPackageDependency(name=dep))
+
+        host = ["python", "numpy", "pip", "pkg-config"]
+        for dep in host:
+            recipe.requirements.host.append(ItemPackageDependency(name=dep))
 
         # Generate build script
-        build_script_context = BuildScriptContext(
-            installer=installer,
-            build_platform=build_platform,
-            editable=editable,
-            manifest_root=manifest_root,
-        )
+        build_script_context = BuildScriptContext.load_from_template(package_xml, build_platform)
         build_script_lines = build_script_context.render()
 
-        # Determine noarch setting
-        noarch_kind = NoArchKind.python() if backend_config.is_noarch() else None
-
-        # Read pyproject.toml
-        pyproject_manifest = read_pyproject_toml(manifest_root)
-
-        # Extract entry points
-        entry_points = extract_entry_points(pyproject_manifest)
-
         # Update recipe components
-        recipe.build.python = Python(entry_points=entry_points)
-        recipe.build.noarch = noarch_kind
         recipe.build.script = Script(
-            content=build_script_lines,
+            content=["exit 1"],
             env=backend_config.env,
         )
 
@@ -159,8 +137,6 @@ def convert_package_xml_to_catkin_package(package_xml_content: str) -> CatkinPac
     # Evaluate conditions in the package.xml
     # TODO: validate the need for dealing with configuration conditions
     package_xml.evaluate_conditions(os.environ)
-
-    # print(f"Read package.xml: {package_xml.name} version {package_xml.version}")
 
     return package_xml
 
@@ -211,3 +187,5 @@ def package_xml_to_conda_requirements(
     cond.run = run_requirements
 
     return cond
+
+

@@ -5,6 +5,7 @@ authors = ["Nichita Morcotilo <nichita@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 license = "BSD-3-Clause"
+preview = ["pixi-build"]
 
 [tasks]
 
@@ -59,3 +60,15 @@ fmt-check = { depends-on = ["fmt-python-check", "fmt-rust-check"] }
 [environments]
 test = { features = ["build", "test"], solve-group = "default" }
 build = ["build"]
+
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/pixi-build-backends"]
+
+[package]
+name = "py-pixi-build-backend"
+version = "0.1.0"
+
+[package.host-dependencies]
+maturin = "*"
