@@ -27,6 +27,13 @@ macro_rules! create_py_item {
                 })
             }
 
+            #[staticmethod]
+            pub fn from_template(value: String) -> Self {
+                $name {
+                    inner: Item::Value(Value::Template(value)),
+                }
+            }
+
             pub fn is_value(&self) -> bool {
                 matches!(self.inner, Item::Value(_))
             }

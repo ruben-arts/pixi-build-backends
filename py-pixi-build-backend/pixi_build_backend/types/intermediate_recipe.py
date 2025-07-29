@@ -48,6 +48,11 @@ class IntermediateRecipe:
     def requirements(self) -> "ConditionalRequirements":
         """Get the requirements configuration."""
         return ConditionalRequirements._from_inner(self._inner.requirements)
+    
+    @requirements.setter
+    def requirements(self, value: "ConditionalRequirements") -> None:
+        """Set the requirements configuration."""
+        self._inner.requirements = value._inner
 
     @property
     def about(self) -> Optional["About"]:
@@ -129,6 +134,11 @@ class Package:
         self._inner = PyPackage(ValueString.concrete(name)._inner, ValueString.concrete(version)._inner)
 
     @property
+    def name(self) -> "ValueString":
+        """Get the package name."""
+        return ValueString._from_inner(self._inner.name)
+    
+    @name.setter
     def name(self) -> "ValueString":
         """Get the package name."""
         return ValueString._from_inner(self._inner.name)
@@ -705,6 +715,35 @@ class ItemPackageDependency:
 
     def __init__(self, name: str):
         self._inner = PyItemPackageDependency(name)
+
+
+    @staticmethod
+    def from_template(template: str) -> "ItemPackageDependency":
+        """
+        Create an ItemPackageDependency from a jinja template string.
+
+        Parameters
+        ----------
+        template : str
+            The jinja template string for the package dependency.
+
+        Returns
+        -------
+        ItemPackageDependency
+            The constructed ItemPackageDependency object.
+
+
+        Examples
+        --------
+        ```python
+        >>> model = ItemPackageDependency.from_template("my-project")
+        >>> str(model)
+        'Value(Template("my-project"))'
+        >>>
+        ```
+        """
+        return ItemPackageDependency._from_inner(PyItemPackageDependency.from_template(template))
+
 
     @classmethod
     def _from_inner(cls, inner: PyItemPackageDependency) -> "ItemPackageDependency":
