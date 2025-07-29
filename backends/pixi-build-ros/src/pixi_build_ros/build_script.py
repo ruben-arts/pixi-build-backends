@@ -7,25 +7,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 import platform
 
-
-class Installer(Enum):
-    """Available Python installers."""
-
-    UV = "uv"
-    PIP = "pip"
-
-    def package_name(self) -> str:
-        """Get the package name for this installer."""
-        return self.value
-
-    @classmethod
-    def determine_installer(cls, dependencies: Dict[str, Any]) -> "Installer":
-        """Determine which installer to use based on dependencies."""
-        if "uv" in dependencies:
-            return cls.UV
-        return cls.PIP
-
-
 class BuildPlatform(Enum):
     """Build platform types."""
 
@@ -76,3 +57,18 @@ class BuildScriptContext:
             lines.append("if errorlevel 1 exit 1")
 
         return lines
+    
+    def get_build_script(self, pkg: CatkinPackage) -> str:
+        """Get the build script from the template directory based on the package type."""
+        # TODO: deal with other script languages, e.g. for Windows
+        templates_dir = Path(__file__).parent.parent / "templates"
+        if pkg.get_build_type() in ["ament_cmake"]:
+            script_path = templates_dir / "build_ament_cmake.sh"
+        elif pkg.get_build_type() in ["ament_python"]:
+            script_path = templates_dir / "build_ament_python.sh"
+        elif pkg.get_build_type() in ["cmake", "catkin"]:
+            script_path = templates_dir / "build_catkin.sh"
+        else:
+            raise ValueError(f"Unsupported build type: {pkg.get_build_type()}")
+
+        return script_path

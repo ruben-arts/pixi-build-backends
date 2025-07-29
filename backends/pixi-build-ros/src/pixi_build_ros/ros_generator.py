@@ -59,7 +59,17 @@ class ROSGenerator(GenerateRecipeProtocol):
         manifest_root = Path(manifest_path).parent
 
         # Read package.xml
-        package = read_package_xml(manifest_root)
+        package_xml_str = get_package_xml_content(manifest_root)
+        package_xml = convert_package_xml_to_catkin_package(package_xml_str)
+
+        name = package_xml.name
+        version = package_xml.version
+        description = package_xml.description or ""
+        license = package_xml.license or ""
+
+        # Get requirements from package.xml
+        package_requirements = package_xml_to_conda_requirements(package_xml, distro="noetic")
+
 
         # Create base recipe from model
         generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
@@ -72,10 +82,7 @@ class ROSGenerator(GenerateRecipeProtocol):
         resolved_requirements = requirements.resolve(host_platform)
 
         # Merge package requirements into the host requirements
-        build_type = package.get_build_type()
-        name = package.name
-        version = package.version
-        group_depends = package.group_depends
+  
 
 
         # Determine installer (pip or uv)
@@ -160,8 +167,6 @@ def convert_package_xml_to_catkin_package(package_xml_content: str) -> CatkinPac
     # TODO: validate the need for dealing with configuration conditions
     package_xml.evaluate_conditions(os.environ)
 
-    # print(f"Read package.xml: {package_xml.name} version {package_xml.version}")
-
     return package_xml
 
 def rosdep_to_conda_package_name(dep_name: str, distro: str) -> List[str]:
@@ -211,3 +216,5 @@ def package_xml_to_conda_requirements(
     cond.run = run_requirements
 
     return cond
+
+
