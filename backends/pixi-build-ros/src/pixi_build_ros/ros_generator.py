@@ -21,6 +21,7 @@ from .utils import read_pyproject_toml, get_build_input_globs, get_editable_sett
 from catkin_pkg.package import Package as CatkinPackage, parse_package_string
 import os
 import yaml
+from itertools import chain
 from pprint import pprint
 
 @dataclass
@@ -191,6 +192,7 @@ def package_xml_to_conda_requirements(
     build_deps += pkg.build_export_depends
     build_deps = [d.name for d in build_deps if d.evaluated_condition]
     conda_build_deps = [rosdep_to_conda_package_name(dep, distro) for dep in build_deps]
+    conda_build_deps = list(chain.from_iterable(conda_build_deps))
 
     run_deps = pkg.run_depends
     run_deps += pkg.exec_depends
@@ -198,6 +200,7 @@ def package_xml_to_conda_requirements(
     run_deps += pkg.buildtool_export_depends
     run_deps = [d.name for d in run_deps if d.evaluated_condition]
     conda_run_deps = [rosdep_to_conda_package_name(dep, distro) for dep in run_deps]
+    conda_run_deps = list(chain.from_iterable(conda_run_deps))
 
     build_requirements = [ItemPackageDependency(name) for name in conda_build_deps]
     run_requirements = [ItemPackageDependency(name) for name in conda_run_deps]

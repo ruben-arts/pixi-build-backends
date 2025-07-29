@@ -61,4 +61,4 @@ def test_package_xml_to_recipe_config():
     package = convert_package_xml_to_catkin_package(package_xml_content)
     requirements = package_xml_to_conda_requirements(package, distro="noetic")
     
-    pprint(requirements)
+    print(requirements.build)
