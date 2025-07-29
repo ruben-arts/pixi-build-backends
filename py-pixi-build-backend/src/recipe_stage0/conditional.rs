@@ -4,6 +4,7 @@ use pyo3::{Bound, FromPyObject, PyAny, PyErr, PyResult, intern, pyclass, pymetho
 use recipe_stage0::matchspec::PackageDependency;
 use recipe_stage0::recipe::Value;
 use recipe_stage0::recipe::{Conditional, Item, ListOrItem};
+use std::fmt::Display;
 
 macro_rules! create_py_item {
     ($name: ident, $type: ident) => {
@@ -32,6 +33,16 @@ macro_rules! create_py_item {
 
             pub fn is_conditional(&self) -> bool {
                 matches!(self.inner, Item::Conditional(_))
+            }
+
+            pub fn as_str(&self) -> String {
+                format!("{:?}", self.inner)
+            }
+        }
+
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.inner)
             }
         }
     };

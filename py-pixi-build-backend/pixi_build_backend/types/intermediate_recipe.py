@@ -558,7 +558,7 @@ class ConditionalRequirements:
     @property
     def build(self) -> "ConditionalListPackageDependency":
         """Get the build requirements."""
-        return self._inner.build
+        return [ItemPackageDependency._from_inner(build) for build in self._inner.build]
 
     @build.setter
     def build(self, value: "ConditionalListPackageDependency") -> None:
@@ -568,8 +568,7 @@ class ConditionalRequirements:
     @property
     def host(self) -> "ConditionalListPackageDependency":
         """Get the host requirements."""
-        # return ConditionalListPackageDependency._from_inner(self._inner.host)
-        return self._inner.host
+        return [ItemPackageDependency._from_inner(host) for host in self._inner.host]
 
     @host.setter
     def host(self, value: "ConditionalListPackageDependency") -> None:
@@ -579,7 +578,7 @@ class ConditionalRequirements:
     @property
     def run(self) -> "ConditionalListPackageDependency":
         """Get the run requirements."""
-        return self._inner.run
+        return [ItemPackageDependency._from_inner(run) for run in self._inner.run]
 
     @run.setter
     def run(self, value: "ConditionalListPackageDependency") -> None:
@@ -589,7 +588,7 @@ class ConditionalRequirements:
     @property
     def run_constraints(self) -> "ConditionalListPackageDependency":
         """Get the run constraints."""
-        return self._inner.run_constraints
+        return [ItemPackageDependency._from_inner(run_constraint) for run_constraint in self._inner.run_constraints]
 
     @run_constraints.setter
     def run_constraints(self, value: "ConditionalListPackageDependency") -> None:
@@ -713,6 +712,10 @@ class ItemPackageDependency:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
+    
+
+    def __str__(self):
+        return self._inner.as_str()
 
 
 class ItemString:

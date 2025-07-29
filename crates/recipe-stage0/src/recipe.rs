@@ -86,6 +86,15 @@ impl<T: Debug> Debug for Item<T> {
     }
 }
 
+impl<T: Display> Display for Item<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Item::Value(value) => write!(f, "Value({})", value),
+            Item::Conditional(cond) => write!(f, "Conditional({})", cond),
+        }
+    }
+}
+
 impl<T> From<Conditional<T>> for Item<T> {
     fn from(value: Conditional<T>) -> Self {
         Self::Conditional(value)
@@ -288,6 +297,16 @@ impl<T: Debug> Debug for Conditional<T> {
         write!(
             f,
             "Conditional {{ condition: {}, then: {:?}, else: {:?} }}",
+            self.condition, self.then, self.else_value
+        )
+    }
+}
+
+impl<T: Display> Display for Conditional<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "if {} then {} else {}",
             self.condition, self.then, self.else_value
         )
     }
