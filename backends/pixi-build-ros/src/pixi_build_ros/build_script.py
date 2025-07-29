@@ -6,6 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List
 import platform
+from catkin_pkg.package import Package as CatkinPackage
 
 class BuildPlatform(Enum):
     """Build platform types."""
@@ -24,51 +25,34 @@ class BuildScriptContext:
 
     def __init__(
         self,
-        installer: Installer,
+        script_content: str,
         build_platform: BuildPlatform,
-        editable: bool,
-        manifest_root: Path,
     ):
-        self.installer = installer
+        self.script_content = script_content
         self.build_platform = build_platform
-        self.editable = editable
-        self.manifest_root = manifest_root
 
     def render(self) -> List[str]:
-        """Render the build script."""
-        if self.build_platform == BuildPlatform.WINDOWS:
-            python_var = "%PYTHON%"
-            src_dir = str(self.manifest_root) if self.editable else "%SRC_DIR%"
-        else:
-            python_var = "$PYTHON"
-            src_dir = str(self.manifest_root) if self.editable else "$SRC_DIR"
+        """Render the build script content into a list of lines."""
+        return self.script_content.splitlines()
 
-        editable_option = " --editable" if self.editable else ""
-        common_options = f"-vv --no-deps --no-build-isolation{editable_option}"
-
-        if self.installer == Installer.UV:
-            command = f"uv pip install --python {python_var} {common_options} {src_dir}"
-        else:
-            command = f"{python_var} -m pip install --ignore-installed {common_options} {src_dir}"
-
-        lines = [command]
-
-        if self.build_platform == BuildPlatform.WINDOWS:
-            lines.append("if errorlevel 1 exit 1")
-
-        return lines
-    
-    def get_build_script(self, pkg: CatkinPackage) -> str:
+    @classmethod
+    def load_from_template(cls, pkg: CatkinPackage, platform: BuildPlatform) -> "BuildScriptContext":
         """Get the build script from the template directory based on the package type."""
         # TODO: deal with other script languages, e.g. for Windows
-        templates_dir = Path(__file__).parent.parent / "templates"
+        templates_dir = Path(__file__).parent.parent.parent / "templates"
         if pkg.get_build_type() in ["ament_cmake"]:
-            script_path = templates_dir / "build_ament_cmake.sh"
+            script_path = templates_dir / "build_ament_cmake.sh.in"
         elif pkg.get_build_type() in ["ament_python"]:
-            script_path = templates_dir / "build_ament_python.sh"
+            script_path = templates_dir / "build_ament_python.sh.in"
         elif pkg.get_build_type() in ["cmake", "catkin"]:
-            script_path = templates_dir / "build_catkin.sh"
+            script_path = templates_dir / "build_catkin.sh.in"
         else:
             raise ValueError(f"Unsupported build type: {pkg.get_build_type()}")
-
-        return script_path
+        
+        with open(script_path, 'r') as f:
+            script_content = f.read()
+    
+        return cls(
+            script_content=script_content,
+            build_platform=platform,
+        )

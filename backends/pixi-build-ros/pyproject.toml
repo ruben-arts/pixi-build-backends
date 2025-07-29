@@ -1,17 +1,21 @@
 [project]
-authors = [{name = "Ruben Arts", email = "ruben.arts@hotmail.com"}]
-dependencies = []
+dependencies = ["catkin_pkg", "pytest", "toml", "pyyaml"]
 name = "pixi-build-ros"
 requires-python = ">= 3.11"
-version = "0.1.0"
+version = "0.1.1"
+
+[project.scripts]
+pixi-build-ros = "pixi_build_ros.main:main"
+
 
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64"]
+preview = ["pixi-build"]
 
 [tool.pixi.pypi-dependencies]
 pixi_build_ros = { path = ".", editable = true }
@@ -22,3 +26,19 @@ catkin_pkg = ">=1.0.0,<2"
 pytest = ">=8.4.1,<9"
 toml = ">=0.10.2,<0.11"
 pyyaml = ">=6.0.2,<7"
+
+[tool.pixi.package.build]
+backend = { name = "pixi-build-python", version = "*" }
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/pixi-build-backends"]
+
+[tool.pixi.package]
+name = "pixi-build-ros"
+version = "0.1.2"
+
+[tool.pixi.package.host-dependencies]
+hatchling = "*"
+
+[tool.pixi.package.run-dependencies]
+catkin_pkg = "*"
+toml = "*"
+pyyaml = "*"
