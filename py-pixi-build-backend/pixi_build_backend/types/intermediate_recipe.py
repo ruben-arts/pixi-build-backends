@@ -43,6 +43,11 @@ class IntermediateRecipe:
     def build(self) -> "Build":
         """Get the build configuration."""
         return Build._from_inner(self._inner.build)
+    
+    @build.setter
+    def build(self, value: "Build") -> None:
+        """Set the build configuration."""
+        self._inner.build = value._inner
 
     @property
     def requirements(self) -> "ConditionalRequirements":
@@ -139,14 +144,19 @@ class Package:
         return ValueString._from_inner(self._inner.name)
     
     @name.setter
-    def name(self) -> "ValueString":
-        """Get the package name."""
-        return ValueString._from_inner(self._inner.name)
+    def name(self, value: "ValueString") -> None:
+        """Set the package name."""
+        self._inner.name = value._inner
 
     @property
     def version(self) -> "ValueString":
         """Get the package version."""
         return ValueString._from_inner(self._inner.version)
+
+    @version.setter
+    def version(self, value: "ValueString") -> None:
+        """Set the package version."""
+        self._inner.version = value._inner
 
     @classmethod
     def _from_inner(cls, inner: PyPackage) -> "Package":

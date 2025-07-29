@@ -42,6 +42,11 @@ impl PyIntermediateRecipe {
         }
     }
 
+    #[setter]
+    pub fn set_package(&mut self, value: PyPackage) {
+        self.inner.package = value.inner;
+    }
+
     #[getter]
     pub fn build(&self) -> PyBuild {
         PyBuild {
@@ -49,11 +54,21 @@ impl PyIntermediateRecipe {
         }
     }
 
+    #[setter]
+    pub fn set_build(&mut self, value: PyBuild) {
+        self.inner.build = value.inner;
+    }
+
     #[getter]
     pub fn requirements(&self) -> PyConditionalRequirements {
         PyConditionalRequirements {
             inner: self.inner.requirements.clone(),
         }
+    }
+
+    #[setter]
+    pub fn set_requirements(&mut self, value: PyConditionalRequirements) {
+        self.inner.requirements = value.inner;
     }
 
     #[getter]
@@ -123,11 +138,21 @@ impl PyPackage {
         }
     }
 
+    #[setter]
+    pub fn set_name(&mut self, name: PyValueString) {
+        self.inner.name = name.inner;
+    }
+
     #[getter]
     pub fn version(&self) -> PyValueString {
         PyValueString {
             inner: self.inner.version.clone(),
         }
+    }
+
+    #[setter]
+    pub fn set_version(&mut self, version: PyValueString) {
+        self.inner.version = version.inner;
     }
 }
 
