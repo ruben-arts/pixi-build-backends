@@ -67,7 +67,28 @@ class ROSGenerator(GenerateRecipeProtocol):
         description = package_xml.description or ""
 
         # Get requirements from package.xml
-        package_requirements = package_xml_to_conda_requirements(package_xml, distro="noetic")
+        package_requirements = package_xml_to_conda_requirements(package_xml, distro="jazzy")
+
+        # Add standard dependencies
+        build = ["ninja", "python", "setuptools", "git", "git-lfs", "cmake", "cpython", "clang_osx-arm64", "clangxx_osx-arm64"]
+        # if build_platform.is_unix():
+        #     build.extend(["patch", "make", "coreutils"])
+        # if build_platform.is_windows():
+        #     build.extend(["m2-patch"])
+        # if build_platform.is_macos():
+        #     build.extend(["tapi"])        
+
+        # TODO: add the `compiler('c')` and `compiler('cxx')` using templates.
+        for dep in build:
+            build = package_requirements.build
+            build.append(ItemPackageDependency(name=dep))
+            package_requirements.build = build
+
+        host = ["python", "numpy", "pip", "pkg-config"]
+        for dep in host:
+            host = package_requirements.host
+            host.append(ItemPackageDependency(name=dep))
+            package_requirements.host = host
 
         # Create base recipe from model
         generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
@@ -81,39 +102,41 @@ class ROSGenerator(GenerateRecipeProtocol):
         # resolved_requirements = recipe.requirements.resolve(host_platform)
 
         # Merge package requirements into the host requirements
-        recipe.requirements.host.extend(package_requirements.host)
-        recipe.requirements.build.extend(package_requirements.build)
-        recipe.requirements.run.extend(package_requirements.run)
+        requirements = recipe.requirements
+        requirements.host = package_requirements.host
+        requirements.build = package_requirements.build
+        requirements.run = package_requirements.run
+        recipe.requirements = requirements
+        generated_recipe.recipe = recipe
 
         # Determine build platform
         build_platform = BuildPlatform.current()
 
-        # Add standard dependencies
-        build = ["ninja", "python", "setuptools", "git", "git-lfs", "cmake", "cpython"]
-        # if build_platform.is_unix():
-        #     build.extend(["patch", "make", "coreutils"])
-        # if build_platform.is_windows():
-        #     build.extend(["m2-patch"])
-        # if build_platform.is_macos():
-        #     build.extend(["tapi"])        
-
-        for dep in build:
-            recipe.requirements.host.append(ItemPackageDependency(name=dep))
-
-        host = ["python", "numpy", "pip", "pkg-config"]
-        for dep in host:
-            recipe.requirements.host.append(ItemPackageDependency(name=dep))
+  
 
         # Generate build script
         build_script_context = BuildScriptContext.load_from_template(package_xml, build_platform)
         build_script_lines = build_script_context.render()
 
         # Update recipe components
-        recipe.build.script = Script(
-            content=["exit 1"],
-            env=backend_config.env,
-        )
+        # recipe.build.script = Script(
+        #     content=build_script_lines,
+        #     env=backend_config.env,
+        # )
 
+        # Stupid setter chain as it doesn't work directly
+        script = Script(
+            content=build_script_lines,
+            env=backend_config.env,
+            )        
+        build = recipe.build
+        build.script = script
+        recipe.build = build
+        generated_recipe.recipe = recipe
+
+        # Test the build script before running to early out.
+        assert generated_recipe.recipe.build.script.content == build_script_lines, recipe.build.script.content
+        
         return generated_recipe
 
     def extract_input_globs_from_build(self, config: ROSBackendConfig, workdir: Path, editable: bool) -> List[str]:
@@ -158,7 +181,7 @@ def rosdep_to_conda_package_name(dep_name: str, distro: str) -> List[str]:
 
 def package_xml_to_conda_requirements(
     pkg: CatkinPackage,
-    distro: str = "noetic",
+    distro: str,
 ) -> ConditionalRequirements:
     build_tool_deps = pkg.buildtool_depends
     build_tool_deps += pkg.buildtool_export_depends
@@ -167,6 +190,7 @@ def package_xml_to_conda_requirements(
     build_deps = pkg.build_depends
     build_deps += pkg.build_export_depends
     build_deps = [d.name for d in build_deps if d.evaluated_condition]
+    build_deps += ["ros_workspace"]
     conda_build_deps = [rosdep_to_conda_package_name(dep, distro) for dep in build_deps]
     conda_build_deps = list(chain.from_iterable(conda_build_deps))
 
