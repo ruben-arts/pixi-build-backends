@@ -240,7 +240,7 @@ class Script:
     @content.setter
     def content(self, value: List[str]) -> None:
         """Set the script content."""
-        self._inner.set_content(value)
+        self._inner.content = value
 
     @property
     def env(self) -> Dict[str, str]:
@@ -250,7 +250,7 @@ class Script:
     @env.setter
     def env(self, value: Dict[str, str]) -> None:
         """Set the environment variables."""
-        self._inner.set_env(value)
+        self._inner.env = value
 
     @property
     def secrets(self) -> List[str]:
@@ -260,7 +260,7 @@ class Script:
     @secrets.setter
     def secrets(self, value: List[str]) -> None:
         """Set the secrets."""
-        self._inner.set_secrets(value)
+        self._inner.secrets = value
 
     @classmethod
     def _from_inner(cls, inner: PyScript) -> "Script":
