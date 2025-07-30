@@ -1,64 +1,16 @@
-import pprint
+from pathlib import Path
+
+from pixi_build_ros.distro import Distro
 from pixi_build_ros.ros_generator import convert_package_xml_to_catkin_package, package_xml_to_conda_requirements
-import pytest
-from catkin_pkg.package import Package as CatkinPackage, parse_package_string
 
-def test_package_xml_to_recipe_config():
-    # Example package.xml content
-    package_xml_content = """<?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
-<package format="2">
-<name>demo_nodes_cpp</name>
-<version>0.37.1</version>
-<description>
-    C++ nodes which were previously in the ros2/examples repository but are now just used for demo purposes.
-</description>
+def test_package_xml_to_recipe_config(package_xmls: Path):
+    # Read content from the file in the test data directory
+    package_xml_path = package_xmls / "demo_nodes_cpp.xml"
+    package_content = package_xml_path.read_text(encoding='utf-8')
+    package = convert_package_xml_to_catkin_package(package_content)
 
-<maintainer email="aditya.pande@openrobotics.org">Aditya Pande</maintainer>
-<maintainer email="audrow@openrobotics.org">Audrow Nash</maintainer>
-
-<license>Apache License 2.0</license>
-
-<author email="mabel@openrobotics.org">Mabel Zhang</author>
-<author email="william@osrfoundation.org">William Woodall</author>
-
-<buildtool_depend>ament_cmake</buildtool_depend>
-
-<build_depend>example_interfaces</build_depend>
-<build_depend>rcl</build_depend>
-<build_depend>rclcpp</build_depend>
-<build_depend>rclcpp_components</build_depend>
-<build_depend>rcl_interfaces</build_depend>
-<build_depend>rcpputils</build_depend>
-<build_depend>rcutils</build_depend>
-<build_depend>rmw</build_depend>
-<build_depend>std_msgs</build_depend>
-<exec_depend>example_interfaces</exec_depend>
-<exec_depend>launch_ros</exec_depend>
-<exec_depend>launch_xml</exec_depend>
-<exec_depend>rcl</exec_depend>
-<exec_depend>rclcpp</exec_depend>
-<exec_depend>rclcpp_components</exec_depend>
-<exec_depend>rcl_interfaces</exec_depend>
-<exec_depend>rcpputils</exec_depend>
-<exec_depend>rcutils</exec_depend>
-<exec_depend>rmw</exec_depend>
-<exec_depend>std_msgs</exec_depend>
-
-<test_depend>ament_cmake_pytest</test_depend>
-<test_depend>ament_lint_auto</test_depend>
-<test_depend>ament_lint_common</test_depend>
-<test_depend>launch</test_depend>
-<test_depend>launch_testing</test_depend>
-<test_depend>launch_testing_ament_cmake</test_depend>
-<test_depend>launch_testing_ros</test_depend>
-
-<export>
-    <build_type>ament_cmake</build_type>
-</export>
-</package>
-"""
-    package = convert_package_xml_to_catkin_package(package_xml_content)
-    requirements = package_xml_to_conda_requirements(package, distro="noetic")
+    distro = Distro("jazzy")
+    requirements = package_xml_to_conda_requirements(package, distro)
     
     [print(bbuild) for bbuild in requirements.build]
+

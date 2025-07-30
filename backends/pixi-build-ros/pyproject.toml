@@ -1,5 +1,5 @@
 [project]
-dependencies = ["catkin_pkg", "pytest", "toml", "pyyaml"]
+dependencies = ["rosdistro", "catkin_pkg", "pytest", "toml", "pyyaml"]
 name = "pixi-build-ros"
 requires-python = ">= 3.11"
 version = "0.1.1"
@@ -20,12 +20,6 @@ preview = ["pixi-build"]
 pixi_build_ros = { path = ".", editable = true }
 py-pixi-build-backend = { path = "../../py-pixi-build-backend", editable = true }
 
-[tool.pixi.dependencies]
-catkin_pkg = ">=1.0.0,<2"
-pytest = ">=8.4.1,<9"
-toml = ">=0.10.2,<0.11"
-pyyaml = ">=6.0.2,<7"
-
 [tool.pixi.package.build]
 backend = { name = "pixi-build-python", version = "*" }
 channels = ["https://prefix.dev/pixi-build-backends", "https://prefix.dev/conda-forge"]
@@ -38,6 +32,7 @@ version = "0.1.2"
 hatchling = "*"
 
 [tool.pixi.package.run-dependencies]
+rosdistro = "*"
 catkin_pkg = "*"
 toml = "*"
 pyyaml = "*"

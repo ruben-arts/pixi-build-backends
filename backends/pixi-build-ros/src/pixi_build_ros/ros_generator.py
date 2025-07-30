@@ -9,14 +9,15 @@ from pixi_build_backend.types.generated_recipe import (
     GenerateRecipeProtocol,
     GeneratedRecipe,
 )
-from pixi_build_backend.types.intermediate_recipe import NoArchKind, Python, Script, ConditionalRequirements, ItemPackageDependency
+from pixi_build_backend.types.intermediate_recipe import NoArchKind, Python, Script, ConditionalRequirements, \
+    ItemPackageDependency, Package
 from pixi_build_backend.types.platform import Platform
 from pixi_build_backend.types.project_model import ProjectModelV1
 from pixi_build_backend.types.python_params import PythonParams
 
 from .build_script import BuildScriptContext, BuildPlatform
-from .utils import extract_entry_points
-from .utils import read_pyproject_toml, get_build_input_globs, get_editable_setting
+from .distro import Distro
+from .utils import get_build_input_globs, get_editable_setting
 
 from catkin_pkg.package import Package as CatkinPackage, parse_package_string
 import os
@@ -32,6 +33,7 @@ class ROSBackendConfig:
     env: Optional[Dict[str, str]] = None
     debug_dir: Optional[Path] = None
     extra_input_globs: Optional[List[str]] = None
+    distro: Optional[str] = None
 
     def is_noarch(self) -> bool:
         """Whether to build a noarch package or a platform-specific package."""
@@ -64,31 +66,39 @@ class ROSGenerator(GenerateRecipeProtocol):
 
         name = package_xml.name
         version = package_xml.version
-        description = package_xml.description or ""
+
+        # TODO: Set this on the recipe
+        package = Package(name, version)
+
 
         # Get requirements from package.xml
-        package_requirements = package_xml_to_conda_requirements(package_xml, distro="jazzy")
+        distro = Distro(backend_config.distro)
+        package_requirements = package_xml_to_conda_requirements(package_xml, distro)
 
         # Add standard dependencies
-        build = ["ninja", "python", "setuptools", "git", "git-lfs", "cmake", "cpython", "clang_osx-arm64", "clangxx_osx-arm64"]
-        # if build_platform.is_unix():
-        #     build.extend(["patch", "make", "coreutils"])
-        # if build_platform.is_windows():
-        #     build.extend(["m2-patch"])
-        # if build_platform.is_macos():
-        #     build.extend(["tapi"])        
+        build_deps = ["ninja", "python", "setuptools", "git", "git-lfs", "cmake", "cpython"]
+        if host_platform.is_unix:
+            build_deps.extend(["patch", "make", "coreutils"])
+        if host_platform.is_windows:
+            build_deps.extend(["m2-patch"])
+        if host_platform.is_osx:
+            build_deps.extend(["tapi"])
 
-        # TODO: add the `compiler('c')` and `compiler('cxx')` using templates.
-        for dep in build:
-            build = package_requirements.build
+        build = package_requirements.build
+        for dep in build_deps:
             build.append(ItemPackageDependency(name=dep))
-            package_requirements.build = build
 
-        host = ["python", "numpy", "pip", "pkg-config"]
-        for dep in host:
-            host = package_requirements.host
+        # Add compiler dependencies
+        build.append(ItemPackageDependency.from_template("${{ compiler('c') }}"))
+        build.append(ItemPackageDependency.from_template("${{ compiler('cxx') }}"))
+        package_requirements.build = build
+
+        host_deps = ["python", "numpy", "pip", "pkg-config"]
+
+        host = package_requirements.host
+        for dep in host_deps:
             host.append(ItemPackageDependency(name=dep))
-            package_requirements.host = host
+        package_requirements.host = host
 
         # Create base recipe from model
         generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
@@ -112,8 +122,6 @@ class ROSGenerator(GenerateRecipeProtocol):
         # Determine build platform
         build_platform = BuildPlatform.current()
 
-  
-
         # Generate build script
         build_script_context = BuildScriptContext.load_from_template(package_xml, build_platform)
         build_script_lines = build_script_context.render()
@@ -136,12 +144,12 @@ class ROSGenerator(GenerateRecipeProtocol):
 
         # Test the build script before running to early out.
         assert generated_recipe.recipe.build.script.content == build_script_lines, recipe.build.script.content
-        
+        # raise RuntimeError(f"Generated recipe: {recipe.to_yaml()}")
         return generated_recipe
 
-    def extract_input_globs_from_build(self, config: ROSBackendConfig, workdir: Path, editable: bool) -> List[str]:
+    def extract_input_globs_from_build(self, config: ROSBackendConfig, editable: bool) -> List[str]:
         """Extract input globs for the build."""
-        return get_build_input_globs(config, workdir, editable)
+        return get_build_input_globs(config, editable)
 
 
 def get_package_xml_content(manifest_root: Path) -> str:
@@ -154,6 +162,7 @@ def get_package_xml_content(manifest_root: Path) -> str:
         return f.read()
 
 def convert_package_xml_to_catkin_package(package_xml_content: str) -> CatkinPackage:
+    """Convert package.xml content to a CatkinPackage object."""
     package_reading_warnings = None
     package_xml = parse_package_string(package_xml_content, package_reading_warnings)
 
@@ -163,14 +172,24 @@ def convert_package_xml_to_catkin_package(package_xml_content: str) -> CatkinPac
 
     return package_xml
 
-def rosdep_to_conda_package_name(dep_name: str, distro: str) -> List[str]:
+def rosdep_to_conda_package_name(dep_name: str, distro: Distro) -> List[str]:
+    """Convert a ROS dependency name to a conda package name."""
+    # TODO: Currently hardcoded and not able to override, this should be configurable
     with open(Path(__file__).parent.parent.parent / "robostack.yaml") as f:
         # Parse yaml file into dict
         robostack_data = yaml.safe_load(f)
 
     if dep_name not in robostack_data:
-        return [f"ros-{distro}-{dep_name.replace('_', '-')}"]
+        # If the dependency is not found in robostack.yaml, check the actual distro whether it exists
+        if distro.has_package(dep_name):
+            # This means that it is a ROS package, so we are going to assume has the `ros-<distro>-<dep_name>` format.
+            return [f"ros-{distro.name}-{dep_name.replace('_', '-')}"]
+        else:
+            # If the dependency is not found in robostack.yaml and not in the distro, return the dependency name as is.
+            return [dep_name]
 
+    # Dependency found in robostack.yaml
+    # Get the conda packages for the dependency
     conda_packages = robostack_data[dep_name].get("robostack", [])
 
     if isinstance(conda_packages, dict):
@@ -181,7 +200,7 @@ def rosdep_to_conda_package_name(dep_name: str, distro: str) -> List[str]:
 
 def package_xml_to_conda_requirements(
     pkg: CatkinPackage,
-    distro: str,
+    distro: Distro,
 ) -> ConditionalRequirements:
     build_tool_deps = pkg.buildtool_depends
     build_tool_deps += pkg.buildtool_export_depends
@@ -192,7 +211,7 @@ def package_xml_to_conda_requirements(
     build_deps = [d.name for d in build_deps if d.evaluated_condition]
     build_deps += ["ros_workspace"]
     conda_build_deps = [rosdep_to_conda_package_name(dep, distro) for dep in build_deps]
-    conda_build_deps = list(chain.from_iterable(conda_build_deps))
+    conda_build_deps = list(dict.fromkeys(chain.from_iterable(conda_build_deps)))
 
     run_deps = pkg.run_depends
     run_deps += pkg.exec_depends
@@ -200,7 +219,7 @@ def package_xml_to_conda_requirements(
     run_deps += pkg.buildtool_export_depends
     run_deps = [d.name for d in run_deps if d.evaluated_condition]
     conda_run_deps = [rosdep_to_conda_package_name(dep, distro) for dep in run_deps]
-    conda_run_deps = list(chain.from_iterable(conda_run_deps))
+    conda_run_deps = list(dict.fromkeys(chain.from_iterable(conda_run_deps)))
 
     build_requirements = [ItemPackageDependency(name) for name in conda_build_deps]
     run_requirements = [ItemPackageDependency(name) for name in conda_run_deps]
