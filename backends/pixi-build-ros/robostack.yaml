@@ -75,9 +75,9 @@ draco:
 eigen:
   robostack: [eigen]
 emacs:
-# Wait until https://github.com/conda-forge/gtk3-feedstock/pull/74 is resolved
-# and emacs is rebuilt for harfbuzz=10
-#   robostack: [emacs]
+  # Wait until https://github.com/conda-forge/gtk3-feedstock/pull/74 is resolved
+  # and emacs is rebuilt for harfbuzz=10
+  #   robostack: [emacs]
   robostack: []
 festival:
   robostack:
@@ -149,9 +149,25 @@ gtest:
 gtk2:
   robostack: [gtk2]
 gtk3:
-  robostack: [libglib, glib, gtk3, harfbuzz, libxcb, pthread-stubs, xorg-libxau, xorg-libxi,
-    xorg-libxrandr, xorg-libxcursor, xorg-libxtst, xorg-libxcomposite, xorg-libxdamage,
-    xorg-libxinerama, xorg-xineramaproto, epoxy, REQUIRE_GL]
+  robostack: [
+    libglib,
+    glib,
+    gtk3,
+    harfbuzz,
+    libxcb,
+    pthread-stubs,
+    xorg-libxau,
+    xorg-libxi,
+    xorg-libxrandr,
+    xorg-libxcursor,
+    xorg-libxtst,
+    xorg-libxcomposite,
+    xorg-libxdamage,
+    xorg-libxinerama,
+    xorg-xineramaproto,
+    epoxy,
+    REQUIRE_GL,
+  ]
 ignition-common4:
   robostack: [libignition-common4]
 ignition-cmake2:
@@ -476,7 +492,7 @@ libvtk:
 libvtk-qt:
   robostack: [vtk]
 libvulkan-dev:
-  robostack: 
+  robostack:
     linux: [libvulkan-headers, libvulkan-loader]
     osx: []
     win64: [libvulkan-headers, libvulkan-loader]

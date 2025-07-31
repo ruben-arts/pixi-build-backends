@@ -22,7 +22,10 @@ py-pixi-build-backend = { path = "../../py-pixi-build-backend", editable = true 
 
 [tool.pixi.package.build]
 backend = { name = "pixi-build-python", version = "*" }
-channels = ["https://prefix.dev/pixi-build-backends", "https://prefix.dev/conda-forge"]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
 
 [tool.pixi.package]
 name = "pixi-build-ros"

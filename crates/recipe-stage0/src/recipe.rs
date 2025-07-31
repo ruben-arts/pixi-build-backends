@@ -316,7 +316,7 @@ impl<T: Display> Display for Conditional<T> {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ConditionalList<T>(pub Vec<Item<T>>);
 
-impl<T> Default for ConditionalList<T> {    
+impl<T> Default for ConditionalList<T> {
     fn default() -> Self {
         ConditionalList(Vec::new())
     }
@@ -528,7 +528,10 @@ pub struct UrlSource {
 
 impl Display for UrlSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let sha256 = self.sha256.as_ref().map_or("".to_string(), |s| s.to_string());
+        let sha256 = self
+            .sha256
+            .as_ref()
+            .map_or("".to_string(), |s| s.to_string());
         write!(f, "url: {}, sha256: {}", self.url, sha256)
     }
 }
@@ -541,7 +544,10 @@ pub struct PathSource {
 
 impl Display for PathSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let sha256 = self.sha256.as_ref().map_or("".to_string(), |s| s.to_string());
+        let sha256 = self
+            .sha256
+            .as_ref()
+            .map_or("".to_string(), |s| s.to_string());
         write!(f, "path: {}, sha256: {}", self.path, sha256)
     }
 }
@@ -557,7 +563,13 @@ pub struct Script {
 
 impl Display for Script {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "content: [{}], env: {:?}, secrets: {:?}", self.content.join(", "), self.env, self.secrets)
+        write!(
+            f,
+            "content: [{}], env: {:?}, secrets: {:?}",
+            self.content.join(", "),
+            self.env,
+            self.secrets
+        )
     }
 }
 
@@ -589,11 +601,7 @@ impl Display for Python {
         if self.entry_points.is_empty() {
             write!(f, "no entry points")
         } else {
-            write!(
-                f,
-                "entry points: {:?}",
-                self.entry_points
-            )
+            write!(f, "entry points: {:?}", self.entry_points)
         }
     }
 }
@@ -623,7 +631,11 @@ impl Build {
 
 impl Display for Build {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "script: {}, noarch: {:?}, python: {}", self.script, self.noarch, self.python)
+        write!(
+            f,
+            "script: {}, noarch: {:?}, python: {}",
+            self.script, self.noarch, self.python
+        )
     }
 }
 
@@ -674,7 +686,8 @@ impl ConditionalRequirements {
         list: &ConditionalList<PackageDependency>,
         platform: Option<Platform>,
     ) -> IndexMap<PackageName, PackageDependency> {
-        list.0.iter()
+        list.0
+            .iter()
             .flat_map(|item| Self::resolve_item(item, platform))
             .collect()
     }
@@ -714,7 +727,7 @@ impl ConditionalRequirements {
                 }
             }
         }
-    }    
+    }
 }
 impl Display for ConditionalRequirements {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -857,7 +870,7 @@ mod tests {
             source,
             build: Build::default(),
             requirements: ConditionalRequirements {
-                build:  ConditionalList(vec![
+                build: ConditionalList(vec![
                     "${{ compiler('cxx') }}".parse().unwrap(),
                     "cmake".parse().unwrap(),
                     Conditional {
@@ -867,11 +880,11 @@ mod tests {
                     }
                     .into(),
                 ]),
-                host:  ConditionalList(vec![
+                host: ConditionalList(vec![
                     "xtl >=0.7,<0.8".parse().unwrap(),
                     "${{ context.name }}".parse().unwrap(),
                 ]),
-                run:  ConditionalList(vec!["xtl >=0.7,<0.8".parse().unwrap()]),
+                run: ConditionalList(vec!["xtl >=0.7,<0.8".parse().unwrap()]),
                 run_constraints: ConditionalList(vec!["xsimd >=8.0.3,<10".parse().unwrap()]),
             },
             about: Some(About {
@@ -898,4 +911,3 @@ mod tests {
         insta::assert_yaml_snapshot!(recipe)
     }
 }
-

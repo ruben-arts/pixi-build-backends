@@ -117,20 +117,22 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &TargetsV1) -> Condi
                         .into()
                     }),
             );
-            run_items.0.extend(
-                package_requirements
-                    .run
-                    .into_iter()
-                    .map(|spec| spec.1)
-                    .map(|spec| {
-                        Conditional {
-                            condition: selector.to_string(),
-                            then: ListOrItem(vec![spec]),
-                            else_value: ListOrItem::default(),
-                        }
-                        .into()
-                    }),
-            );
+            run_items
+                .0
+                .extend(
+                    package_requirements
+                        .run
+                        .into_iter()
+                        .map(|spec| spec.1)
+                        .map(|spec| {
+                            Conditional {
+                                condition: selector.to_string(),
+                                then: ListOrItem(vec![spec]),
+                                else_value: ListOrItem::default(),
+                            }
+                            .into()
+                        }),
+                );
         }
     }
 
