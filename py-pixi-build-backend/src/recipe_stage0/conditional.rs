@@ -42,8 +42,8 @@ macro_rules! create_py_item {
                 matches!(self.inner, Item::Conditional(_))
             }
 
-            pub fn as_str(&self) -> String {
-                format!("{:?}", self.inner)
+            pub fn __str__(&self) -> String {
+                format!("{}", self.inner)
             }
         }
 
@@ -102,6 +102,11 @@ macro_rules! create_pylist_or_item {
                 self.inner.0.clone()
             }
         }
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.inner)
+            }
+        }
     };
 }
 
@@ -150,6 +155,11 @@ macro_rules! create_conditional_interface {
                     [<PyListOrItem $type>] {
                         inner: self.inner.else_value.clone(),
                     }
+                }
+            }
+            impl Display for $name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}", self.inner)
                 }
             }
         }

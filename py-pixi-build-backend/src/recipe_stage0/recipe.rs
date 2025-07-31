@@ -13,10 +13,7 @@ use pyo3::{
     types::{PyList, PyListMethods},
 };
 use rattler_conda_types::package::EntryPoint;
-use recipe_stage0::recipe::{
-    About, Build, ConditionalRequirements, Extra, IntermediateRecipe, NoArchKind, Package,
-    PathSource, Python, Script, Source, UrlSource, Value,
-};
+use recipe_stage0::recipe::{About, Build, ConditionalList, ConditionalRequirements, Extra, IntermediateRecipe, NoArchKind, Package, PathSource, Python, Script, Source, UrlSource, Value};
 use std::collections::HashMap;
 
 // Main recipe structure
@@ -522,7 +519,7 @@ impl PyConditionalRequirements {
     pub fn build(&self) -> PyResult<Py<PyList>> {
         BindingPython::with_gil(|py| {
             let list = PyList::empty(py);
-            for dep in &self.inner.build {
+            for dep in &self.inner.build.0 {
                 list.append(PyItemPackageDependency { inner: dep.clone() })?;
             }
             Ok(list.unbind())
@@ -533,7 +530,7 @@ impl PyConditionalRequirements {
     pub fn host(&self) -> PyResult<Py<PyList>> {
         BindingPython::with_gil(|py| {
             let list = PyList::empty(py);
-            for dep in &self.inner.host {
+            for dep in &self.inner.host.0 {
                 list.append(PyItemPackageDependency { inner: dep.clone() })?;
             }
             Ok(list.unbind())
@@ -544,7 +541,7 @@ impl PyConditionalRequirements {
     pub fn run(&self) -> PyResult<Py<PyList>> {
         BindingPython::with_gil(|py| {
             let list = PyList::empty(py);
-            for dep in &self.inner.run {
+            for dep in &self.inner.run.0 {
                 list.append(PyItemPackageDependency { inner: dep.clone() })?;
             }
             Ok(list.unbind())
@@ -555,7 +552,7 @@ impl PyConditionalRequirements {
     pub fn run_constraints(&self) -> PyResult<Py<PyList>> {
         BindingPython::with_gil(|py| {
             let list = PyList::empty(py);
-            for dep in &self.inner.run_constraints {
+            for dep in &self.inner.run_constraints.0 {
                 list.append(PyItemPackageDependency { inner: dep.clone() })?;
             }
             Ok(list.unbind())
@@ -567,7 +564,7 @@ impl PyConditionalRequirements {
         self.inner.build = build
             .into_iter()
             .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
+            .collect::<PyResult<ConditionalList<_>>>()?;
         Ok(())
     }
 
@@ -576,7 +573,7 @@ impl PyConditionalRequirements {
         self.inner.host = host
             .into_iter()
             .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
+            .collect::<PyResult<ConditionalList<_>>>()?;
         Ok(())
     }
 
@@ -585,7 +582,7 @@ impl PyConditionalRequirements {
         self.inner.run = run
             .into_iter()
             .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
+            .collect::<PyResult<ConditionalList<_>>>()?;
         Ok(())
     }
 
@@ -594,8 +591,11 @@ impl PyConditionalRequirements {
         self.inner.run_constraints = run_constraints
             .into_iter()
             .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
+            .collect::<PyResult<ConditionalList<_>>>()?;
         Ok(())
+    }
+    pub fn __str__(&self) -> String {
+        format!("{}", self.inner)
     }
 
     pub fn resolve(&self, host_platform: Option<&PyPlatform>) -> PyPackageSpecDependencies {
@@ -682,7 +682,7 @@ impl PyExtra {
     pub fn recipe_maintainers(&self) -> PyResult<Py<PyList>> {
         BindingPython::with_gil(|py| {
             let list = PyList::empty(py);
-            for dep in &self.inner.recipe_maintainers {
+            for dep in &self.inner.recipe_maintainers.0 {
                 list.append(PyItemString { inner: dep.clone() })?;
             }
             Ok(list.unbind())

@@ -575,6 +575,9 @@ class ConditionalRequirements:
     def __init__(self) -> None:
         self._inner = PyConditionalRequirements()
 
+    def __repr__(self):
+        return str(self._inner)
+
     @property
     def build(self) -> "ConditionalListPackageDependency":
         """Get the build requirements."""
@@ -764,7 +767,11 @@ class ItemPackageDependency:
     
 
     def __str__(self):
-        return self._inner.as_str()
+        return str(self._inner)
+
+    def __repr__(self):
+        return str(self._inner)
+
 
 
 class ItemString:

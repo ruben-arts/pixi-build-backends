@@ -58,7 +58,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &TargetsV1) -> Condi
 
         // source_target_requirements.default_target = source_requirements;
 
-        build_items.extend(
+        build_items.0.extend(
             package_requirements
                 .build
                 .into_iter()
@@ -66,7 +66,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &TargetsV1) -> Condi
                 .map(Item::from),
         );
 
-        host_items.extend(
+        host_items.0.extend(
             package_requirements
                 .host
                 .into_iter()
@@ -74,7 +74,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &TargetsV1) -> Condi
                 .map(Item::from),
         );
 
-        run_items.extend(
+        run_items.0.extend(
             package_requirements
                 .run
                 .into_iter()
@@ -89,7 +89,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &TargetsV1) -> Condi
             let package_requirements = target_to_package_spec(target);
 
             // add the binary requirements
-            build_items.extend(
+            build_items.0.extend(
                 package_requirements
                     .build
                     .into_iter()
@@ -103,7 +103,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &TargetsV1) -> Condi
                         .into()
                     }),
             );
-            host_items.extend(
+            host_items.0.extend(
                 package_requirements
                     .host
                     .into_iter()
@@ -117,7 +117,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &TargetsV1) -> Condi
                         .into()
                     }),
             );
-            run_items.extend(
+            run_items.0.extend(
                 package_requirements
                     .run
                     .into_iter()

@@ -57,13 +57,15 @@ def merge_requirements(model_requirements: ConditionalRequirements, package_requ
         """Merge unique items from source into target."""
         result = model
         for item in package:
-            if item.name not in [i.name for i in model]:
+            if item not in [i for i in model]:
                 result.append(item)
         return result
 
     merged.host = merge_unique_items(model_requirements.host, package_requirements.host)
     merged.build = merge_unique_items(model_requirements.build, package_requirements.build)
     merged.run = merge_unique_items(model_requirements.run, package_requirements.run)
+
+    raise RuntimeError(f"merged requirements: {merged}")
 
     return merged
 
