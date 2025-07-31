@@ -33,4 +33,5 @@ class Distro(object):
 
     def has_package(self, package_name):
         """Check if the distribution has a specific package."""
+        packages = self._distro.release_packages
         return package_name in self._distro.release_packages
