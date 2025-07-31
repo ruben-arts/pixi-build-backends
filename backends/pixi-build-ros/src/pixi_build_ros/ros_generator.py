@@ -44,6 +44,30 @@ class ROSBackendConfig:
         return self.debug_dir
 
 
+def merge_requirements(model_requirements: ConditionalRequirements, package_requirements: ConditionalRequirements) -> ConditionalRequirements:
+    """Merge two sets of requirements."""
+    merged = ConditionalRequirements()
+
+    # The model requirements are the base, coming from the pixi manifest
+    # We need to only add the names for non existing dependencies
+    def merge_unique_items(
+        model: List[ItemPackageDependency],
+        package: List[ItemPackageDependency],
+    ) -> List[ItemPackageDependency]:
+        """Merge unique items from source into target."""
+        result = model
+        for item in package:
+            if item.name not in [i.name for i in model]:
+                result.append(item)
+        return result
+
+    merged.host = merge_unique_items(model_requirements.host, package_requirements.host)
+    merged.build = merge_unique_items(model_requirements.build, package_requirements.build)
+    merged.run = merge_unique_items(model_requirements.run, package_requirements.run)
+
+    return merged
+
+
 class ROSGenerator(GenerateRecipeProtocol):
     """ROS recipe generator using Python bindings."""
 
@@ -108,14 +132,8 @@ class ROSGenerator(GenerateRecipeProtocol):
         # recipe.package.name = name
         # recipe.package.version = version
 
-        # Resolve requirements for the host platform
-        # resolved_requirements = recipe.requirements.resolve(host_platform)
-
-        # Merge package requirements into the host requirements
-        requirements = recipe.requirements
-        requirements.host = package_requirements.host
-        requirements.build = package_requirements.build
-        requirements.run = package_requirements.run
+        # Merge package requirements into the model requirements
+        requirements = merge_requirements(recipe.requirements, package_requirements)
         recipe.requirements = requirements
         generated_recipe.recipe = recipe
 
@@ -174,6 +192,10 @@ def convert_package_xml_to_catkin_package(package_xml_content: str) -> CatkinPac
 
 def rosdep_to_conda_package_name(dep_name: str, distro: Distro) -> List[str]:
     """Convert a ROS dependency name to a conda package name."""
+    # If dependency any of the following return custom name:
+    if dep_name in ["ament_cmake", "ament_python", "rosidl_default_generators"]:
+        return [f"ros-{distro.name}-{dep_name.replace('_', '-')}"]
+
     # TODO: Currently hardcoded and not able to override, this should be configurable
     with open(Path(__file__).parent.parent.parent / "robostack.yaml") as f:
         # Parse yaml file into dict
@@ -202,11 +224,10 @@ def package_xml_to_conda_requirements(
     pkg: CatkinPackage,
     distro: Distro,
 ) -> ConditionalRequirements:
-    build_tool_deps = pkg.buildtool_depends
-    build_tool_deps += pkg.buildtool_export_depends
-    build_tool_deps = [d.name for d in build_tool_deps if d.evaluated_condition]
 
-    build_deps = pkg.build_depends
+    build_deps = pkg.buildtool_depends
+    build_deps += pkg.buildtool_export_depends
+    build_deps += pkg.build_depends
     build_deps += pkg.build_export_depends
     build_deps = [d.name for d in build_deps if d.evaluated_condition]
     build_deps += ["ros_workspace"]
