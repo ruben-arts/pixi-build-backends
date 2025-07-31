@@ -14,6 +14,10 @@ preview = ["pixi-build"]
 py-pixi-build-backend = { path = "." }
 pixi-build-api-version = { path = "/Users/rubenarts/dev/pixi-build-backends/recipe/output/noarch/pixi-build-api-version-1-h4616a5c_0.conda" }
 
+pytest = "*"
+syrupy = "*"
+toml = "*"
+
 [feature.build.dependencies]
 python = "*"
 maturin = "~=1.2.2"

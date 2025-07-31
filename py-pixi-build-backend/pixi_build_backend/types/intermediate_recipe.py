@@ -764,10 +764,11 @@ class ItemPackageDependency:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
-    
 
-    def __str__(self):
-        return str(self._inner)
+    @property
+    def package_name(self) -> str:
+        """Get the package name."""
+        return self._inner.value().package_name()
 
     def __repr__(self):
         return str(self._inner)

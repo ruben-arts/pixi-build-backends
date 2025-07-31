@@ -1,5 +1,6 @@
+use crate::recipe_stage0::requirements::{PyPackageDependency};
 use pyo3::exceptions::PyTypeError;
-use pyo3::types::PyAnyMethods;
+use pyo3::types::{PyAnyMethods, PyString};
 use pyo3::{Bound, FromPyObject, PyAny, PyErr, PyResult, intern, pyclass, pymethods};
 use recipe_stage0::matchspec::PackageDependency;
 use recipe_stage0::recipe::Value;
@@ -8,48 +9,58 @@ use std::fmt::Display;
 
 macro_rules! create_py_item {
     ($name: ident, $type: ident) => {
-        #[pyclass]
-        #[derive(Clone)]
-        pub struct $name {
-            pub(crate) inner: Item<$type>,
-        }
-
-        #[pymethods]
-        impl $name {
-            #[new]
-            pub fn new(value: String) -> PyResult<Self> {
-                let val = value
-                    .parse::<$type>()
-                    .map_err(|_| PyTypeError::new_err(format!("Failed to parse {value}")))?;
-
-                Ok($name {
-                    inner: Item::Value(Value::Concrete(val)),
-                })
+        paste::paste! {
+            #[pyclass]
+            #[derive(Clone)]
+            pub struct $name {
+                pub(crate) inner: Item<$type>,
             }
 
-            #[staticmethod]
-            pub fn from_template(value: String) -> Self {
-                $name {
-                    inner: Item::Value(Value::Template(value)),
+            #[pymethods]
+            impl $name {
+                #[new]
+                pub fn new(value: String) -> PyResult<Self> {
+                    let val = value
+                        .parse::<$type>()
+                        .map_err(|_| PyTypeError::new_err(format!("Failed to parse {value}")))?;
+
+                    Ok($name {
+                        inner: Item::Value(Value::Concrete(val)),
+                    })
+                }
+
+                #[staticmethod]
+                pub fn from_template(value: String) -> Self {
+                    $name {
+                        inner: Item::Value(Value::Template(value)),
+                    }
+                }
+
+                pub fn is_value(&self) -> bool {
+                    matches!(self.inner, Item::Value(_))
+                }
+
+                pub fn is_conditional(&self) -> bool {
+                    matches!(self.inner, Item::Conditional(_))
+                }
+
+                pub fn __str__(&self) -> String {
+                    format!("{:?}", self.inner)
+                }
+
+                pub fn value(&self) -> Option<[<Py $type>]> {
+                    if let Item::Value(Value::Concrete(val)) = &self.inner {
+                        Some([Py $type](val.clone()))
+                    } else {
+                        None
+                    }
                 }
             }
 
-            pub fn is_value(&self) -> bool {
-                matches!(self.inner, Item::Value(_))
-            }
-
-            pub fn is_conditional(&self) -> bool {
-                matches!(self.inner, Item::Conditional(_))
-            }
-
-            pub fn __str__(&self) -> String {
-                format!("{}", self.inner)
-            }
-        }
-
-        impl Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.inner)
+            impl Display for $name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}", self.inner)
+                }
             }
         }
     };
@@ -102,11 +113,6 @@ macro_rules! create_pylist_or_item {
                 self.inner.0.clone()
             }
         }
-        impl Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.inner)
-            }
-        }
     };
 }
 
@@ -155,11 +161,6 @@ macro_rules! create_conditional_interface {
                     [<PyListOrItem $type>] {
                         inner: self.inner.else_value.clone(),
                     }
-                }
-            }
-            impl Display for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}", self.inner)
                 }
             }
         }

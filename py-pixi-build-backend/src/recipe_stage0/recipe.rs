@@ -15,6 +15,7 @@ use pyo3::{
 use rattler_conda_types::package::EntryPoint;
 use recipe_stage0::recipe::{About, Build, ConditionalList, ConditionalRequirements, Extra, IntermediateRecipe, NoArchKind, Package, PathSource, Python, Script, Source, UrlSource, Value};
 use std::collections::HashMap;
+use std::fmt::Display;
 
 // Main recipe structure
 #[pyclass]
@@ -594,6 +595,7 @@ impl PyConditionalRequirements {
             .collect::<PyResult<ConditionalList<_>>>()?;
         Ok(())
     }
+
     pub fn __str__(&self) -> String {
         format!("{}", self.inner)
     }
@@ -612,6 +614,12 @@ impl From<ConditionalRequirements> for PyConditionalRequirements {
         PyConditionalRequirements {
             inner: requirements,
         }
+    }
+}
+
+impl Display for PyConditionalRequirements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
     }
 }
 
