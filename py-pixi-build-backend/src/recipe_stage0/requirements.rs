@@ -124,7 +124,7 @@ impl PyPackageDependency {
             _ => None,
         }
     }
-    
+
     pub fn package_name(&self) -> String {
         self.inner.package_name().as_normalized().to_string()
     }

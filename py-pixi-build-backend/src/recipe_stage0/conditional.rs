@@ -1,14 +1,21 @@
-use crate::recipe_stage0::requirements::{PyPackageDependency};
+use crate::recipe_stage0::requirements::PyPackageDependency;
 use pyo3::exceptions::PyTypeError;
-use pyo3::types::{PyAnyMethods, PyString};
+use pyo3::types::PyAnyMethods;
 use pyo3::{Bound, FromPyObject, PyAny, PyErr, PyResult, intern, pyclass, pymethods};
 use recipe_stage0::matchspec::PackageDependency;
 use recipe_stage0::recipe::Value;
 use recipe_stage0::recipe::{Conditional, Item, ListOrItem};
 use std::fmt::Display;
 
+/// Creates a PyItem class for a given type.
+/// The first argument is the name of the class, the second
+/// is the type it wraps, and the third is the Python type.
+/// It is necessary to provide the Python type because
+/// the String equivalent is still String
+/// but for other types it will be some type
+/// prefixed with Py, like PyPackageDependency.
 macro_rules! create_py_item {
-    ($name: ident, $type: ident) => {
+    ($name: ident, $type: ident, $py_type: ident) => {
         paste::paste! {
             #[pyclass]
             #[derive(Clone)]
@@ -48,9 +55,10 @@ macro_rules! create_py_item {
                     format!("{:?}", self.inner)
                 }
 
-                pub fn value(&self) -> Option<[<Py $type>]> {
+                pub fn value(&self) -> Option<$py_type> {
                     if let Item::Value(Value::Concrete(val)) = &self.inner {
-                        Some([Py $type](val.clone()))
+                        // Some(val.clone())
+                        Some(val.clone().into())
                     } else {
                         None
                     }
@@ -66,8 +74,12 @@ macro_rules! create_py_item {
     };
 }
 
-create_py_item!(PyItemPackageDependency, PackageDependency);
-create_py_item!(PyItemString, String);
+create_py_item!(
+    PyItemPackageDependency,
+    PackageDependency,
+    PyPackageDependency
+);
+create_py_item!(PyItemString, String, String);
 
 macro_rules! create_pylist_or_item {
     ($name: ident, $type: ident) => {

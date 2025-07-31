@@ -13,6 +13,7 @@ preview = ["pixi-build"]
 [dependencies]
 py-pixi-build-backend = { path = "." }
 pixi-build-api-version = { path = "/Users/rubenarts/dev/pixi-build-backends/recipe/output/noarch/pixi-build-api-version-1-h4616a5c_0.conda" }
+# pixi-build-api-version = "*"
 
 pytest = "*"
 syrupy = "*"

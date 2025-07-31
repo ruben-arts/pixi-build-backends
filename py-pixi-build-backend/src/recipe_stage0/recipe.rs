@@ -13,7 +13,10 @@ use pyo3::{
     types::{PyList, PyListMethods},
 };
 use rattler_conda_types::package::EntryPoint;
-use recipe_stage0::recipe::{About, Build, ConditionalList, ConditionalRequirements, Extra, IntermediateRecipe, NoArchKind, Package, PathSource, Python, Script, Source, UrlSource, Value};
+use recipe_stage0::recipe::{
+    About, Build, ConditionalList, ConditionalRequirements, Extra, IntermediateRecipe, NoArchKind,
+    Package, PathSource, Python, Script, Source, UrlSource, Value,
+};
 use std::collections::HashMap;
 use std::fmt::Display;
 
