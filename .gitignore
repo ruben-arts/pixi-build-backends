@@ -42,3 +42,5 @@ pixi-build-python-output/
 # Python cache files
 __pycache__/
 *.pyc
+
+*.local*

@@ -31,6 +31,7 @@ The repository currently provides four specialized build backends:
 | [**`pixi-build-python`**](./backends/pixi-build-python.md) | Building Python packages |
 | [**`pixi-build-rattler-build`**](./backends/pixi-build-rattler-build.md) | Direct `recipe.yaml` builds with full control |
 | [**`pixi-build-rust`**](./backends/pixi-build-rust.md) |  Cargo-based Rust applications and libraries |
+| [**`pixi-build-mojo`**](./backends/pixi-build-mojo.md) |  Mojo applications and packages |
 
 All backends are available through the [prefix.dev/pixi-build-backends](https://prefix.dev/channels/pixi-build-backends) conda channel and work across multiple platforms (Linux, macOS, Windows).
 

@@ -7,8 +7,10 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use ordermap::OrderMap;
 use pixi_build_types::{
     BackendCapabilities, CondaPackageMetadata, PathSpecV1, ProjectModelV1, SourcePackageSpecV1,
+    TargetSelectorV1,
     procedures::{
         conda_build_v0::{
             CondaBuildParams, CondaBuildResult, CondaBuiltPackage, CondaOutputIdentifier,
@@ -51,6 +53,7 @@ use recipe_stage0::matchspec::{PackageDependency, SerializableMatchSpec};
 use serde::Deserialize;
 
 use crate::{
+    TargetSelector,
     dependencies::{
         convert_binary_dependencies, convert_dependencies, convert_input_variant_configuration,
     },
@@ -94,15 +97,18 @@ pub struct IntermediateBackend<T: GenerateRecipe> {
     pub(crate) project_model: ProjectModelV1,
     pub(crate) generate_recipe: Arc<T>,
     pub(crate) config: T::Config,
+    pub(crate) target_config: OrderMap<TargetSelectorV1, T::Config>,
     pub(crate) cache_dir: Option<PathBuf>,
 }
 impl<T: GenerateRecipe> IntermediateBackend<T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         manifest_path: PathBuf,
         source_dir: Option<PathBuf>,
         project_model: ProjectModelV1,
         generate_recipe: Arc<T>,
         config: serde_json::Value,
+        target_config: OrderMap<TargetSelectorV1, serde_json::Value>,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
     ) -> miette::Result<Self> {
@@ -135,12 +141,25 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             .into_diagnostic()
             .context("failed to parse configuration")?;
 
+        let target_config = target_config
+            .into_iter()
+            .map(|(target, config)| {
+                let config = serde_json::from_value::<T::Config>(config)
+                    .into_diagnostic()
+                    .wrap_err_with(|| {
+                        format!("failed to parse target configuration for {target}")
+                    })?;
+                Ok((target, config))
+            })
+            .collect::<Result<_, miette::Report>>()?;
+
         Ok(Self {
             source_dir,
             manifest_rel_path,
             project_model,
             generate_recipe,
             config,
+            target_config,
             logging_output_handler,
             cache_dir,
         })
@@ -179,12 +198,15 @@ where
             serde_json::Value::Object(Default::default())
         };
 
+        let target_config = params.target_configuration.unwrap_or_default();
+
         let instance = IntermediateBackend::<T>::new(
             params.manifest_path,
             params.source_dir,
             project_model,
             self.generator.clone(),
             config,
+            target_config,
             self.logging_output_handler.clone(),
             params.cache_directory,
         )?;
@@ -234,10 +256,17 @@ where
             .map(|p| p.platform)
             .unwrap_or(Platform::current());
 
+        let config = self
+            .target_config
+            .iter()
+            .find(|(selector, _)| selector.matches(host_platform))
+            .map(|(_, target_config)| self.config.merge_with_target_config(target_config))
+            .unwrap_or_else(|| Ok(self.config.clone()))?;
+
         // Construct the intermediate recipe
         let generated_recipe = self.generate_recipe.generate_recipe(
             &self.project_model,
-            &self.config,
+            &config,
             self.source_dir.clone(),
             host_platform,
             Some(PythonParams { editable: false }),
@@ -536,10 +565,17 @@ where
 
         let build_platform = Platform::current();
 
+        let config = self
+            .target_config
+            .iter()
+            .find(|(selector, _)| selector.matches(host_platform))
+            .map(|(_, target_config)| self.config.merge_with_target_config(target_config))
+            .unwrap_or_else(|| Ok(self.config.clone()))?;
+
         // Construct the intermediate recipe
         let mut generated_recipe = self.generate_recipe.generate_recipe(
             &self.project_model,
-            &self.config,
+            &config,
             self.source_dir.clone(),
             host_platform,
             Some(PythonParams {
@@ -759,11 +795,8 @@ where
                 .await?;
 
             // Extract the input globs from the build and recipe
-            let mut input_globs = T::extract_input_globs_from_build(
-                &self.config,
-                &params.work_directory,
-                params.editable,
-            );
+            let mut input_globs =
+                T::extract_input_globs_from_build(&config, &params.work_directory, params.editable);
             input_globs.append(&mut generated_recipe.build_input_globs);
 
             let built_package = CondaBuiltPackage {
@@ -786,10 +819,17 @@ where
     ) -> miette::Result<CondaOutputsResult> {
         let build_platform = params.host_platform;
 
+        let config = self
+            .target_config
+            .iter()
+            .find(|(selector, _)| selector.matches(params.host_platform))
+            .map(|(_, target_config)| self.config.merge_with_target_config(target_config))
+            .unwrap_or_else(|| Ok(self.config.clone()))?;
+
         // Construct the intermediate recipe
         let recipe = self.generate_recipe.generate_recipe(
             &self.project_model,
-            &self.config,
+            &config,
             self.source_dir.clone(),
             params.host_platform,
             Some(PythonParams { editable: false }),
@@ -1023,10 +1063,17 @@ where
             .as_ref()
             .map_or_else(Platform::current, |prefix| prefix.platform);
 
+        let config = self
+            .target_config
+            .iter()
+            .find(|(selector, _)| selector.matches(host_platform))
+            .map(|(_, target_config)| self.config.merge_with_target_config(target_config))
+            .unwrap_or_else(|| Ok(self.config.clone()))?;
+
         // Construct the intermediate recipe
         let mut recipe = self.generate_recipe.generate_recipe(
             &self.project_model,
-            &self.config,
+            &config,
             self.source_dir.clone(),
             host_platform,
             Some(PythonParams {
@@ -1134,11 +1181,23 @@ where
             finalized_dependencies: Some(FinalizedDependencies {
                 build: Some(ResolvedDependencies {
                     specs: vec![],
-                    resolved: vec![],
+                    resolved: params
+                        .build_prefix
+                        .map(|prefix| prefix.packages)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|pkg| pkg.repodata_record)
+                        .collect(),
                 }),
                 host: Some(ResolvedDependencies {
                     specs: vec![],
-                    resolved: vec![],
+                    resolved: params
+                        .host_prefix
+                        .map(|prefix| prefix.packages)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|pkg| pkg.repodata_record)
+                        .collect(),
                 }),
                 run: FinalizedRunDependencies {
                     depends: vec![],
@@ -1158,7 +1217,7 @@ where
 
         // Extract the input globs from the build and recipe
         let mut input_globs = T::extract_input_globs_from_build(
-            &self.config,
+            &config,
             &params.work_directory,
             params.editable.unwrap_or_default(),
         );
