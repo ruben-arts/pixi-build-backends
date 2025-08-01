@@ -15,6 +15,7 @@ env:
   RUST_BACKTRACE: 1
   RUSTFLAGS: "-D warnings"
   CARGO_TERM_COLOR: always
+  TARGET_DIR: target/pixi/ci
 
 jobs:
   build-binary-linux-x86_64:
@@ -38,8 +39,8 @@ jobs:
         with:
           name: pixi-build-backends-linux-x86_64
           path: |
-            target/pixi/release/pixi-build-*
-            !target/pixi/release/pixi-build-*.d
+            ${{ env.TARGET_DIR }}/pixi-build-*
+            !${{ env.TARGET_DIR }}/pixi-build-*.d
           if-no-files-found: error
           retention-days: 60
 
@@ -71,8 +72,8 @@ jobs:
         with:
           name: pixi-build-backends-windows-x86_64
           path: |
-            ${{ env.PIXI_WORKSPACE }}/target/pixi/release/pixi-build-*
-            !${{ env.PIXI_WORKSPACE }}/target/pixi/release/pixi-build-*.d
+            ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_DIR }}/pixi-build-*
+            !${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_DIR }}/pixi-build-*.d
           if-no-files-found: error
           retention-days: 60
 
@@ -97,8 +98,8 @@ jobs:
         with:
           name: pixi-build-backends-macos-aarch64
           path: |
-            target/pixi/release/pixi-build-*
-            !target/pixi/release/pixi-build-*.d
+            ${{ env.TARGET_DIR }}/pixi-build-*
+            !${{ env.TARGET_DIR }}/pixi-build-*.d
           if-no-files-found: error
           retention-days: 60
 
