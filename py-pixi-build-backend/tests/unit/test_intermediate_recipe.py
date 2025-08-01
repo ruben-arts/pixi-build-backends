@@ -14,3 +14,6 @@ def test_from_yaml(snapshot: Any) -> None:
 def test_package_types() -> None:
     package = ItemPackageDependency("test")
     assert package.package_name == "test"
+
+    package = ItemPackageDependency.from_template("${{ compiler('c') }}")
+    assert package.package_name == "${{ compiler('c') }}"

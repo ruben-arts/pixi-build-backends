@@ -768,12 +768,13 @@ class ItemPackageDependency:
     @property
     def package_name(self) -> str:
         """Get the package name."""
-        return self._inner.value().package_name()
+        if self._inner.is_concrete():
+            return self._inner.concrete().package_name()
+        elif self._inner.is_template():
+            return str(self._inner.template())
 
     def __repr__(self):
         return str(self._inner)
-
-
 
 class ItemString:
     """A package dependency item wrapper."""

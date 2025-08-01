@@ -43,8 +43,12 @@ macro_rules! create_py_item {
                     }
                 }
 
-                pub fn is_value(&self) -> bool {
-                    matches!(self.inner, Item::Value(_))
+                pub fn is_concrete(&self) -> bool {
+                    matches!(self.inner, Item::Value(Value::Concrete(_)))
+                }
+                
+                pub fn is_template(&self) -> bool {
+                    matches!(self.inner, Item::Value(Value::Template(_)))
                 }
 
                 pub fn is_conditional(&self) -> bool {
@@ -55,9 +59,16 @@ macro_rules! create_py_item {
                     format!("{:?}", self.inner)
                 }
 
-                pub fn value(&self) -> Option<$py_type> {
+                pub fn concrete(&self) -> Option<$py_type> {
                     if let Item::Value(Value::Concrete(val)) = &self.inner {
-                        // Some(val.clone())
+                        Some(val.clone().into())
+                    } else {
+                        None
+                    }
+                }
+                
+                pub fn template(&self) -> Option<String> {
+                    if let Item::Value(Value::Template(val)) = &self.inner {
                         Some(val.clone().into())
                     } else {
                         None

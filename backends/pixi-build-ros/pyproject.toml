@@ -39,5 +39,5 @@ rosdistro = "*"
 catkin_pkg = "*"
 toml = "*"
 pyyaml = "*"
-pixi-build-api-version = "*"
-py-pixi-build-backend = { path = "/Users/rubenarts/dev/pixi-build-backends/py-pixi-build-backend" }
+pixi-build-api-version = { path = "../../recipe/pixi-build-api-version" }
+py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
