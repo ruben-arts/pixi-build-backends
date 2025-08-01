@@ -15,10 +15,6 @@ py-pixi-build-backend = { path = "." }
 pixi-build-api-version = { path = "/Users/rubenarts/dev/pixi-build-backends/recipe/output/noarch/pixi-build-api-version-1-h4616a5c_0.conda" }
 # pixi-build-api-version = "*"
 
-pytest = "*"
-syrupy = "*"
-toml = "*"
-
 [feature.build.dependencies]
 python = "*"
 maturin = "~=1.2.2"
@@ -43,13 +39,11 @@ pytest = "*"
 syrupy = "*"
 toml = "*"
 
-
 # for rust-analyzer
 rust-src = "~=1.86.0"
 
 [feature.test.pypi-dependencies]
 types-toml = "*"
-
 
 [feature.test.tasks]
 test = { cmd = "pytest --doctest-modules", depends-on = ["build"] }
@@ -68,9 +62,8 @@ fmt-check = { depends-on = ["fmt-python-check", "fmt-rust-check"] }
 
 
 [environments]
-test = { features = ["build", "test"], solve-group = "default" }
+default = { features = ["build", "test"], solve-group = "default" }
 build = ["build"]
-
 
 [package.build]
 backend = { name = "pixi-build-python", version = "*" }
