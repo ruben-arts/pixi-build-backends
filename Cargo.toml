@@ -93,5 +93,5 @@ pixi_build_type_conversions = { git = "https://github.com/prefix-dev/pixi", bran
 codegen-units = 16
 inherits = "release"
 lto = false
-opt-level = 3
+opt-level = 0
 strip = false
