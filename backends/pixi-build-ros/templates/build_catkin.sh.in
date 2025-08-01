@@ -109,9 +109,10 @@ cmake ${CMAKE_ARGS} --compile-no-warning-as-error \
          -DCATKIN_SKIP_TESTING=$SKIP_TESTING \
          -DCATKIN_BUILD_BINARY_PACKAGE=$CATKIN_BUILD_BINARY_PACKAGE \
          -DCMAKE_OSX_DEPLOYMENT_TARGET=$OSX_DEPLOYMENT_TARGET \
+         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
          $EXTRA_CMAKE_ARGS \
          -G "$GENERATOR" \
-         $SRC_DIR/$PKG_NAME/src/work/
+         $SRC_DIR
 
 cmake --build . --config Release --target all
 
