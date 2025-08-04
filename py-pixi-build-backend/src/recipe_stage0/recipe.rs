@@ -11,9 +11,9 @@ use ::serde::{Deserialize, Serialize};
 use indexmap::IndexMap;
 use pyo3::prelude::*;
 use pyo3::{
-    Bound, Py, PyAny, PyRef, PyRefMut, PyResult, Python,
+    Bound, Py, PyAny, PyResult, Python,
     exceptions::PyValueError,
-    pyclass, pymethods, serde,
+    pyclass, pymethods,
     types::{PyList, PyListMethods},
 };
 use rattler_conda_types::package::EntryPoint;
