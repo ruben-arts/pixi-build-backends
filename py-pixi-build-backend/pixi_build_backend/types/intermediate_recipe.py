@@ -20,6 +20,7 @@ from pixi_build_backend.pixi_build_backend import (
     PyItemString,
 )
 from pixi_build_backend.types.platform import Platform
+from pixi_build_backend.types.requirements import PackageDependency
 
 
 ConditionalListPackageDependency = List["ItemPackageDependency"]
@@ -38,6 +39,12 @@ class IntermediateRecipe:
     def package(self) -> "Package":
         """Get the package information."""
         return Package._from_inner(self._inner.package)
+    
+    @package.setter
+    def package(self, value: "Package") -> None:
+        """Set the package information."""
+        self._inner.package = value._inner
+
 
     @property
     def build(self) -> "Build":
@@ -128,6 +135,18 @@ class IntermediateRecipe:
         ```
         """
         return self._inner.to_yaml()
+    
+    def __str__(self) -> str:
+        """
+        Get the string representation of the IntermediateRecipe.
+
+        Returns
+        -------
+        str
+            The YAML representation of the IntermediateRecipe.
+
+        """
+        return str(self._inner)
 
 
 class Package:
@@ -144,9 +163,9 @@ class Package:
         return ValueString._from_inner(self._inner.name)
     
     @name.setter
-    def name(self, value: "ValueString") -> None:
+    def name(self, value: str) -> None:
         """Set the package name."""
-        self._inner.name = value._inner
+        self._inner.name = ValueString(value)._inner
 
     @property
     def version(self) -> "ValueString":
@@ -294,6 +313,17 @@ class Python:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
+    
+    def __str__(self) -> str:
+        """
+        Get the string representation of the Python configuration.
+
+        Returns
+        -------
+        str
+            The string representation of the entry points.
+        """
+        return str(self._inner)
 
 
 class NoArchKind:
@@ -386,6 +416,10 @@ class ValueString:
 
     _inner: PyValueString
 
+
+    def __init__(self, value: str):
+        self._inner = PyValueString(value)
+
     @classmethod
     def concrete(cls, value: str) -> "ValueString":
         """
@@ -472,6 +506,17 @@ class ValueString:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
+    
+    def __str__(self) -> str:
+        """
+        Get the string representation of the ValueString.
+
+        Returns
+        -------
+        str
+            The concrete value if available, otherwise the template.
+        """
+        return str(self._inner)
 
 
 class ValueU64:
@@ -575,9 +620,6 @@ class ConditionalRequirements:
     def __init__(self) -> None:
         self._inner = PyConditionalRequirements()
 
-    def __repr__(self):
-        return str(self._inner)
-
     @property
     def build(self) -> "ConditionalListPackageDependency":
         """Get the build requirements."""
@@ -629,6 +671,17 @@ class ConditionalRequirements:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
+    
+    def __str__(self) -> str:
+        """
+        Get the string representation of the ConditionalRequirements.
+
+        Returns
+        -------
+        str
+            The string representation of the build, host, run, and run constraints.
+        """
+        return str(self._inner)
 
 
 class About:
@@ -730,34 +783,6 @@ class ItemPackageDependency:
         self._inner = PyItemPackageDependency(name)
 
 
-    @staticmethod
-    def from_template(template: str) -> "ItemPackageDependency":
-        """
-        Create an ItemPackageDependency from a jinja template string.
-
-        Parameters
-        ----------
-        template : str
-            The jinja template string for the package dependency.
-
-        Returns
-        -------
-        ItemPackageDependency
-            The constructed ItemPackageDependency object.
-
-
-        Examples
-        --------
-        ```python
-        >>> model = ItemPackageDependency.from_template("my-project")
-        >>> str(model)
-        'Value(Template("my-project"))'
-        >>>
-        ```
-        """
-        return ItemPackageDependency._from_inner(PyItemPackageDependency.from_template(template))
-
-
     @classmethod
     def _from_inner(cls, inner: PyItemPackageDependency) -> "ItemPackageDependency":
         """Create an ItemPackageDependency from a FFI PyItemPackageDependency."""
@@ -765,16 +790,21 @@ class ItemPackageDependency:
         instance._inner = inner
         return instance
 
-    @property
-    def package_name(self) -> str:
-        """Get the package name."""
-        if self._inner.is_concrete():
-            return self._inner.concrete().package_name()
-        elif self._inner.is_template():
-            return str(self._inner.template())
-
-    def __repr__(self):
+    def __str__(self):
         return str(self._inner)
+    
+    @property
+    def concrete(self) -> "PackageDependency":
+        """Get the concrete package dependency."""
+        return self._inner.concrete()
+    
+    @property
+    def template(self) -> Optional[str]:
+        """Get the template string if this is a template."""
+        return self._inner.template()
+
+
+
 
 class ItemString:
     """A package dependency item wrapper."""

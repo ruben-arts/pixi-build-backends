@@ -4362,6 +4362,7 @@ version = "0.1.0"
 dependencies = [
  "dict_derive",
  "indexmap 2.10.0",
+ "itertools 0.14.0",
  "miette",
  "paste",
  "pixi-build-backend",
