@@ -16,10 +16,10 @@ pub enum Value<T> {
     Template(String), // Jinja template like "${{ name|lower }}"
 }
 
-impl<T: ToString> Display for Value<T> {
+impl<T: Display> Display for Value<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Concrete(val) => write!(f, "{}", val.to_string()),
+            Value::Concrete(val) => write!(f, "{}", val),
             Value::Template(template) => write!(f, "{}", template),
         }
     }
@@ -63,6 +63,15 @@ impl From<SerializableMatchSpec> for Value<SerializableMatchSpec> {
 pub enum Item<T> {
     Value(Value<T>),
     Conditional(Conditional<T>),
+}
+
+impl<T: Display> Display for Item<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Item::Value(value) => write!(f, "{}", value.to_string()),
+            Item::Conditional(cond) => write!(f, "{}", cond),
+        }
+    }
 }
 
 impl<T: PartialEq> PartialEq for Item<T> {
@@ -293,6 +302,16 @@ impl<T: Debug> Debug for Conditional<T> {
     }
 }
 
+impl<T: Display> Display for Conditional<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "if {} then {} else {}",
+            self.condition, self.then, self.else_value
+        )
+    }
+}
+
 /// Type alias for lists that can contain conditionals
 pub type ConditionalList<T> = Vec<Item<T>>;
 
@@ -336,6 +355,12 @@ impl Default for Package {
             name: Value::Concrete("default-package".to_string()),
             version: Value::Concrete("0.0.1".to_string()),
         }
+    }
+}
+
+impl Display for Package {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.name, self.version)
     }
 }
 
@@ -389,6 +414,24 @@ impl From<PathSource> for Source {
     }
 }
 
+impl FromStr for Source {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with("http://") || s.starts_with("https://") {
+            Ok(Source::Url(UrlSource {
+                url: Value::Concrete(s.to_string()),
+                sha256: None,
+            }))
+        } else {
+            Ok(Source::Path(PathSource {
+                path: Value::Concrete(s.to_string()),
+                sha256: None,
+            }))
+        }
+    }
+}
+
 impl Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -438,6 +481,14 @@ pub enum NoArchKind {
     Generic,
 }
 
+impl Display for NoArchKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NoArchKind::Python => write!(f, "python"),
+            NoArchKind::Generic => write!(f, "generic"),
+        }
+    }
+}
 /// Python specific build configuration
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Python {
@@ -451,6 +502,15 @@ impl Python {
     /// Returns true if this is the default python configuration.
     pub fn is_default(&self) -> bool {
         self.entry_points.is_empty()
+    }
+}
+
+impl Display for Python {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for entry_point in &self.entry_points {
+            write!(f, "{}, ", entry_point)?;
+        }
+        Ok(())
     }
 }
 
@@ -567,6 +627,35 @@ impl ConditionalRequirements {
     }
 }
 
+impl Display for ConditionalRequirements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ build: {}, host: {}, run: {}, run_constraints: {} }}",
+            self.build
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.host
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.run
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.run_constraints
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Requirements {
     pub build: Vec<SerializableMatchSpec>,
@@ -575,15 +664,53 @@ pub(crate) struct Requirements {
     pub run_constraints: Vec<SerializableMatchSpec>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct Test {
     pub package_contents: Option<PackageContents>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+impl Display for Test {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Test {{ package_contents: {} }}",
+            self.package_contents
+                .as_ref()
+                .map(|pc| pc.to_string())
+                .unwrap_or_default()
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct PackageContents {
     pub include: Option<ConditionalList<String>>,
     pub files: Option<ConditionalList<String>>,
+}
+
+impl Display for PackageContents {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "PackageContents {{ include: {}, files: {} }}",
+            self.include
+                .as_ref()
+                .map(|include| include
+                    .iter()
+                    .map(|i| i.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "))
+                .unwrap_or_default(),
+            self.files
+                .as_ref()
+                .map(|files| files
+                    .iter()
+                    .map(|f| f.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "))
+                .unwrap_or_default()
+        )
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -597,10 +724,61 @@ pub struct About {
     pub repository: Option<Value<String>>,
 }
 
+impl Display for About {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "About {{ homepage: {}, license: {}, license_file: {}, summary: {}, description: {}, documentation: {}, repository: {} }}",
+            self.homepage
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.license
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.license_file
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.summary
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.description
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.documentation
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.repository
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_default()
+        )
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Extra {
     #[serde(rename = "recipe-maintainers")]
     pub recipe_maintainers: ConditionalList<String>,
+}
+
+impl Display for Extra {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ recipe_maintainers: {} }}",
+            self.recipe_maintainers
+                .iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
 }
 
 // Implementation for Recipe

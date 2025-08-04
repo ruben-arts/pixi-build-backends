@@ -1,63 +1,117 @@
-use std::path::PathBuf;
+use std::{collections::BTreeSet, path::PathBuf};
 
 use miette::IntoDiagnostic;
 use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe};
 use pyo3::{
-    PyObject, Python, pyclass, pymethods,
+    Py, PyObject, PyResult, Python, pyclass, pymethods,
     types::{PyAnyMethods, PyString},
 };
+use recipe_stage0::recipe::IntermediateRecipe;
 
 use crate::{
+    create_py_wrap,
     recipe_stage0::recipe::PyIntermediateRecipe,
     types::{PyBackendConfig, PyPlatform, PyProjectModelV1, PyPythonParams},
 };
 
-#[pyclass]
-#[derive(Clone, Default)]
+create_py_wrap!(PyVecString, Vec<String>, |v: &Vec<String>,
+                                           f: &mut std::fmt::Formatter<
+    '_,
+>| {
+    write!(f, "[{}]", v.join(", "))
+});
+
+#[pyclass(get_all, set_all)]
+#[derive(Clone)]
 pub struct PyGeneratedRecipe {
-    pub(crate) inner: pixi_build_backend::generated_recipe::GeneratedRecipe,
+    pub(crate) recipe: Py<PyIntermediateRecipe>,
+    pub(crate) metadata_input_globs: Py<PyVecString>,
+    pub(crate) build_input_globs: Py<PyVecString>,
 }
 
 #[pymethods]
 impl PyGeneratedRecipe {
     #[new]
-    pub fn new() -> Self {
-        PyGeneratedRecipe {
-            inner: pixi_build_backend::generated_recipe::GeneratedRecipe::default(),
-        }
+    pub fn new(py: Python) -> PyResult<Self> {
+        Ok(PyGeneratedRecipe {
+            recipe: Py::new(py, PyIntermediateRecipe::new(py)?)?,
+            metadata_input_globs: Py::new(py, PyVecString::default())?,
+            build_input_globs: Py::new(py, PyVecString::default())?,
+        })
     }
 
     #[staticmethod]
-    pub fn from_model(model: PyProjectModelV1, manifest_root: PathBuf) -> Self {
+    pub fn from_model(py: Python, model: PyProjectModelV1, manifest_root: PathBuf) -> Self {
         let recipe = GeneratedRecipe::from_model(model.inner.clone(), manifest_root);
-        PyGeneratedRecipe { inner: recipe }
+        let py_generated_recipe = PyIntermediateRecipe::from_intermediate_recipe(recipe.recipe, py);
+
+        let metadata_input_globs_vec: Vec<String> =
+            recipe.metadata_input_globs.into_iter().collect();
+        let build_input_globs_vec: Vec<String> = recipe.build_input_globs.into_iter().collect();
+
+        let metadata_input_globs_vec = PyVecString::from(metadata_input_globs_vec);
+        let build_input_globs_vec = PyVecString::from(build_input_globs_vec);
+
+        PyGeneratedRecipe {
+            recipe: Py::new(py, py_generated_recipe).unwrap(),
+            metadata_input_globs: Py::new(py, metadata_input_globs_vec).unwrap(),
+            build_input_globs: Py::new(py, build_input_globs_vec).unwrap(),
+        }
     }
 
-    #[getter]
-    pub fn recipe(&self) -> PyIntermediateRecipe {
-        self.inner.recipe.clone().into()
-    }
+    // #[getter]
+    // pub fn recipe(&self, py: Python) -> Py<PyIntermediateRecipe> {
+    //     // self.inner.recipe.clone().into()
+    //     // PyIntermediateRecipe::from_intermediate_recipe(self.inner.recipe.clone(), py)
+    //     self.recipe
+    // }
 
-    #[getter]
-    pub fn metadata_input_globs(&self) -> Vec<String> {
-        self.inner.metadata_input_globs.iter().cloned().collect()
-    }
+    // #[setter]
+    // pub fn set_recipe(&mut self, value: PyIntermediateRecipe) {
+    //     self.inner.recipe = value.inner;
+    // }
 
-    #[getter]
-    pub fn build_input_globs(&self) -> Vec<String> {
-        self.inner.build_input_globs.iter().cloned().collect()
-    }
+    // #[getter]
+    // pub fn metadata_input_globs(&self) -> Vec<String> {
+    //     self.inner.metadata_input_globs.iter().cloned().collect()
+    // }
+
+    // #[getter]
+    // pub fn build_input_globs(&self) -> Vec<String> {
+    //     self.inner.build_input_globs.iter().cloned().collect()
+    // }
 }
 
-impl From<GeneratedRecipe> for PyGeneratedRecipe {
-    fn from(recipe: GeneratedRecipe) -> Self {
-        PyGeneratedRecipe { inner: recipe }
-    }
-}
+// impl From<GeneratedRecipe> for PyGeneratedRecipe {
+//     fn from(recipe: GeneratedRecipe) -> Self {
+//         PyGeneratedRecipe { inner: recipe }
+//     }
+// }
 
-impl From<PyGeneratedRecipe> for GeneratedRecipe {
-    fn from(py_recipe: PyGeneratedRecipe) -> Self {
-        py_recipe.inner
+// impl From<PyGeneratedRecipe> for GeneratedRecipe {
+//     fn from(py_recipe: PyGeneratedRecipe) -> Self {
+//         py_recipe.recipe.clone().into()
+//     }
+// }
+
+impl PyGeneratedRecipe {
+    pub fn into_generated_recipe(&self, py: Python) -> GeneratedRecipe {
+        let recipe: IntermediateRecipe = self.recipe.borrow(py).into_intermediate_recipe(py);
+        let metadata_input_globs: BTreeSet<String> =
+            (*self.metadata_input_globs.borrow(py).clone())
+                .clone()
+                .into_iter()
+                .collect();
+        let build_input_globs: BTreeSet<String> = (*self.build_input_globs.borrow(py).clone())
+            .clone()
+            .into_iter()
+            .collect();
+
+        GeneratedRecipe {
+            recipe,
+            metadata_input_globs,
+            build_input_globs,
+        }
     }
 }
 
@@ -151,7 +205,7 @@ impl GenerateRecipe for PyGenerateRecipe {
                 .extract::<PyGeneratedRecipe>()
                 .into_diagnostic()?;
 
-            Ok::<_, miette::Report>(generated_recipe.into())
+            Ok::<_, miette::Report>(generated_recipe.into_generated_recipe(py))
         })?;
 
         Ok(recipe)
