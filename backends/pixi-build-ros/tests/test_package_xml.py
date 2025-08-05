@@ -17,7 +17,8 @@ def test_package_xml_to_recipe_config(package_xmls: Path):
         "example-interfaces", "rcl", "rclcpp", "rclcpp-components",
         "rcl-interfaces", "rcpputils", "rcutils", "rmw", "std-msgs"
     ]
-    build_names = [pkg.package_name for pkg in requirements.build]
+    build_names = [pkg.concrete.package_name for pkg in requirements.build]
+    print(f"{requirements.build[0].concrete.package_name}")
     for pkg in expected_build_packages:
         assert f"ros-{distro.name}-{pkg}" in build_names
 
@@ -28,7 +29,7 @@ def test_package_xml_to_recipe_config(package_xmls: Path):
         "example-interfaces", "launch-ros", "launch-xml", "rcl", "rclcpp",
         "rclcpp-components", "rcl-interfaces", "rcpputils", "rcutils", "rmw", "std-msgs"
     ]
-    run_names = [pkg.package_name for pkg in requirements.run]
+    run_names = [pkg.concrete.package_name for pkg in requirements.run]
     for pkg in expected_run_packages:
         assert f"ros-{distro.name}-{pkg}" in run_names
 

@@ -53,7 +53,9 @@ def merge_requirements(model_requirements: ConditionalRequirements, package_requ
         """Merge unique items from source into target."""
         result = model
         for item in package:
-            if item.package_name not in [i.package_name for i in model]:
+            if item.concrete.package_name not in [i.concrete.package_name for i in model]:
+                result.append(item)
+            if item.template.package_name not in [i.template.package_name for i in model]:
                 result.append(item)
         return result
 
@@ -111,8 +113,8 @@ class ROSGenerator(GenerateRecipeProtocol):
             build.append(ItemPackageDependency(name=dep))
 
         # Add compiler dependencies
-        build.append(ItemPackageDependency.from_template("${{ compiler('c') }}"))
-        build.append(ItemPackageDependency.from_template("${{ compiler('cxx') }}"))
+        build.append(ItemPackageDependency("${{ compiler('c') }}"))
+        build.append(ItemPackageDependency("${{ compiler('cxx') }}"))
         package_requirements.build = build
 
         host_deps = ["python", "numpy", "pip", "pkg-config"]

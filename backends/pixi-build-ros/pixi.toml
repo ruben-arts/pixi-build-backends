@@ -5,10 +5,8 @@ preview = ["pixi-build"]
 
 [dependencies]
 python = ">=3.13.5,<3.14"
-
-[pypi-dependencies]
-pixi_build_ros = { path = ".", editable = true }
-py-pixi-build-backend = { path = "../../py-pixi-build-backend", editable = true }
+pytest = "*"
+pixi-build-ros = { path = "." }
 
 [package.build]
 backend = { name = "pixi-build-python", version = "*" }
