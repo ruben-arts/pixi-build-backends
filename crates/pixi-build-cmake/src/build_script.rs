@@ -61,7 +61,7 @@ mod test {
             } else {
                 "nopython"
             },
-            if extra_args.is_empty(){
+            if extra_args.is_empty() {
                 "no-extra-args"
             } else {
                 "with-extra-args"
