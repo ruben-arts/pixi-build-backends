@@ -1,13 +1,15 @@
 use ::serde::{Deserialize, Serialize};
 use pyo3::exceptions::PyTypeError;
-use pyo3::types::PyAnyMethods;
-use pyo3::{Bound, FromPyObject, PyAny, PyErr, PyResult, intern, pyclass, pymethods};
+use pyo3::types::{PyAnyMethods, PyList, PyListMethods, PyString};
+use pyo3::{Bound, FromPyObject, Py, PyAny, PyErr, PyResult, Python, intern, pyclass, pymethods};
 use recipe_stage0::matchspec::PackageDependency;
 use recipe_stage0::recipe::{Conditional, Item, ListOrItem, Source, Value};
+use std::boxed::Box;
 use std::fmt::Display;
 
 use std::ops::Deref;
 
+use crate::create_py_wrap;
 use crate::recipe_stage0::recipe::PySource;
 use crate::recipe_stage0::requirements::PyPackageDependency;
 
@@ -70,13 +72,13 @@ macro_rules! create_py_item {
                     }
                 }
 
-                pub fn conditional(&self) -> Option<[<PyConditional $type>]> {
-                    if let Item::Conditional(cond) = &self.inner {
-                        Some(cond.clone().into())
-                    } else {
-                        None
-                    }
-                }
+                // pub fn conditional(&self) -> Option<[<PyConditional $type>]> {
+                //     if let Item::Conditional(cond) = &self.inner {
+                //         Some(cond.clone().into())
+                //     } else {
+                //         None
+                //     }
+                // }
             }
 
             impl Display for $name {
@@ -109,29 +111,45 @@ create_py_item!(
 create_py_item!(PyItemString, String, String);
 create_py_item!(PyItemSource, Source, PySource);
 
+create_py_wrap!(PyVecString, Vec<String>, |v: &Vec<String>,
+                                           f: &mut std::fmt::Formatter<
+    '_,
+>| {
+    write!(f, "[{}]", v.join(", "))
+});
+
+// macro_rules! impl_sort_for_orderable {
+//     ($name: ident, $type: ident) => {
+//         #[pymethods]
+//         impl $name {
+//             pub fn sort(&mut self) {
+//                 self.inner.0.sort();
+//             }
+//         }
+//     };
+// }
+
 macro_rules! create_pylist_or_item {
-    ($name: ident, $type: ident) => {
-        #[pyclass]
-        #[derive(Clone)]
+    ($name: ident, $type: ident, $py_type: ident) => {
+        #[pyclass(str, eq)]
+        #[derive(Clone, PartialEq, Deserialize, Serialize)]
         pub struct $name {
             pub(crate) inner: ListOrItem<$type>,
         }
 
         #[pymethods]
         impl $name {
-            // #[staticmethod]
-            // pub fn single(item: $type) -> Self {
-            //     $name {
-            //         inner: ListOrItem::single(item),
-            //     }
-            // }
+            #[new]
+            pub fn new(item: Vec<String>) -> Self {
+                let item: Vec<$type> = item
+                    .into_iter()
+                    .map(|s| s.parse().expect("Failed to parse item"))
+                    .collect();
 
-            // #[staticmethod]
-            // pub fn list(items: Vec<$type>) -> Self {
-            //     $name {
-            //         inner: ListOrItem::new(items),
-            //     }
-            // }
+                $name {
+                    inner: ListOrItem::<$type>(item),
+                }
+            }
 
             pub fn is_single(&self) -> bool {
                 self.inner.len() == 1
@@ -141,85 +159,307 @@ macro_rules! create_pylist_or_item {
                 self.inner.len() > 1
             }
 
-            // pub fn get_single(&self) -> Option<$type> {
-            //     if self.inner.len() == 1 {
-            //         self.inner.0.first().cloned()
-            //     } else {
-            //         None
-            //     }
-            // }
+            pub fn __getitem__(&self, index: usize) -> PyResult<$py_type> {
+                Ok(Into::<$py_type>::into(
+                    self.inner.0.get(index).cloned().unwrap(),
+                ))
+            }
 
-            // pub fn get_list(&self) -> Vec<$type> {
-            //     self.inner.0.clone()
+            pub fn __len__(&self) -> usize {
+                self.inner.0.len()
+            }
+
+            pub fn __contains__(&self, item: $py_type) -> bool {
+                let inner_item: $type = item.into();
+                self.inner.0.contains(&inner_item)
+            }
+
+            pub fn append(&mut self, item: $py_type) {
+                self.inner.0.push(item.into());
+            }
+
+            pub fn extend(&mut self, items: &Bound<'_, PyList>) {
+                let items: Vec<$type> = items
+                    .iter()
+                    .map(|item| item.extract::<$py_type>().unwrap().into())
+                    .collect();
+                self.inner.0.extend(items);
+            }
+
+            pub fn insert(&mut self, index: usize, item: $py_type) {
+                self.inner.0.insert(index, item.into());
+            }
+
+            pub fn remove(&mut self, item: $py_type) -> PyResult<()> {
+                let target_item: $type = item.clone().into();
+                if let Some(pos) = self.inner.0.iter().position(|x| *x == target_item) {
+                    self.inner.0.remove(pos);
+                    Ok(())
+                } else {
+                    Err(pyo3::exceptions::PyValueError::new_err("item not found"))
+                }
+            }
+
+            pub fn pop(&mut self, index: Option<isize>) -> PyResult<$py_type> {
+                let len = self.inner.0.len();
+                if len == 0 {
+                    return Err(pyo3::exceptions::PyIndexError::new_err(
+                        "pop from empty list",
+                    ));
+                }
+
+                let idx = match index {
+                    Some(i) => {
+                        let idx = if i < 0 {
+                            (len as isize + i) as usize
+                        } else {
+                            i as usize
+                        };
+                        if idx >= len {
+                            return Err(pyo3::exceptions::PyIndexError::new_err(
+                                "pop index out of range",
+                            ));
+                        }
+                        idx
+                    }
+                    None => len - 1,
+                };
+
+                let removed = self.inner.0.remove(idx);
+                Ok(Into::<$py_type>::into(removed))
+            }
+
+            pub fn index(
+                &self,
+                item: $py_type,
+                start: Option<usize>,
+                end: Option<usize>,
+            ) -> PyResult<usize> {
+                let start = start.unwrap_or(0);
+                let end = end.unwrap_or(self.inner.0.len());
+
+                if start >= self.inner.0.len() {
+                    return Err(pyo3::exceptions::PyValueError::new_err("item not found"));
+                }
+
+                for (i, existing_item) in self.inner.0[start..end.min(self.inner.0.len())]
+                    .iter()
+                    .enumerate()
+                {
+                    let target_item: $type = item.clone().into();
+                    if *existing_item == target_item {
+                        return Ok(start + i);
+                    }
+                }
+
+                Err(pyo3::exceptions::PyValueError::new_err("item not found"))
+            }
+
+            pub fn count(&self, item: $py_type) -> usize {
+                let target_item: $type = item.clone().into();
+                self.inner.0.iter().filter(|&x| *x == target_item).count()
+            }
+
+            pub fn clear(&mut self) {
+                self.inner.0.clear();
+            }
+
+            pub fn reverse(&mut self) {
+                self.inner.0.reverse();
+            }
+
+            pub fn copy(&self) -> Self {
+                self.clone()
+            }
+
+            pub fn __setitem__(&mut self, index: usize, value: $py_type) -> PyResult<()> {
+                if index >= self.inner.0.len() {
+                    return Err(pyo3::exceptions::PyIndexError::new_err(
+                        "list index out of range",
+                    ));
+                }
+                self.inner.0[index] = value.into();
+                Ok(())
+            }
+
+            pub fn __delitem__(&mut self, index: usize) -> PyResult<()> {
+                if index >= self.inner.0.len() {
+                    return Err(pyo3::exceptions::PyIndexError::new_err(
+                        "list index out of range",
+                    ));
+                }
+                self.inner.0.remove(index);
+                Ok(())
+            }
+
+            pub fn __iter__(
+                slf: pyo3::pycell::PyRef<'_, Self>,
+                py: Python,
+            ) -> pyo3::PyResult<Py<PyList>> {
+                let py_list = PyList::empty(py);
+                for item in slf.inner.0.iter() {
+                    let py_item: $py_type = item.clone().into();
+                    py_list.append(py_item)?;
+                }
+                Ok(py_list.into())
+            }
+
+            // Do we really need a sort method here?
+            // pub fn sort(&mut self) {
+            //     self.inner.0.sort();
             // }
+        }
+
+        impl From<ListOrItem<$type>> for $name {
+            fn from(inner: ListOrItem<$type>) -> Self {
+                $name { inner }
+            }
+        }
+
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.inner)
+            }
         }
     };
 }
 
-create_pylist_or_item!(PyListOrItemString, String);
-create_pylist_or_item!(PyListOrItemPackageDependency, PackageDependency);
+create_pylist_or_item!(PyListOrItemString, String, String);
+create_pylist_or_item!(
+    PyListOrItemPackageDependency,
+    PackageDependency,
+    PyPackageDependency
+);
+create_pylist_or_item!(PyListOrItemSource, Source, PySource);
 
-create_pylist_or_item!(PyListOrItemSource, Source);
+// impl_sort_for_orderable!(PyListOrItemString, String);
+
+create_py_wrap!(PyWrapString, String);
 
 macro_rules! create_conditional_interface {
-    ($name: ident, $type: ident) => {
+    ($name: ident, $type: ident, $py_type: ident) => {
         paste::paste! {
-            #[pyclass]
-            #[derive(Clone)]
+            #[pyclass(str)]
+            #[derive(Clone, Deserialize, Serialize)]
             pub struct $name {
-                pub(crate) inner: Conditional<$type>,
+                // pub(crate) inner: Conditional<$type>,
+                #[serde(rename = "if")]
+                pub condition: String,
+                pub then: Py<[<PyListOrItem $type>]>,
+                // #[serde(skip)]
+                // pub then: Py<PyList>,
+                #[serde(rename = "else")]
+                pub else_value: Py<[<PyListOrItem $type>]>,
             }
 
             #[pymethods]
             impl $name {
                 #[new]
                 pub fn new(
+                    py: Python,
                     condition: String,
                     then_value: [<PyListOrItem $type>],
-                    else_value: Option<[<PyListOrItem $type>]>,
+                    else_value: [<PyListOrItem $type>],
                 ) -> Self {
-                    $name {
-                        inner: Conditional {
-                            condition,
-                            then: then_value.inner,
-                            else_value: else_value.map(|e| e.inner).unwrap_or_default(),
-                        },
+                    Self {
+                        condition,
+                        then: Py::new(py, then_value).unwrap(),
+                        else_value: Py::new(py, else_value).unwrap(),
                     }
                 }
 
                 #[getter]
                 pub fn condition(&self) -> String {
-                    self.inner.condition.clone()
+                    self.condition.clone()
                 }
 
-                #[getter]
-                pub fn then_value(&self) -> [<PyListOrItem $type>] {
-                    [<PyListOrItem $type>] {
-                        inner: self.inner.then.clone(),
-                    }
-                }
+                // #[getter]
+                // pub fn then_value(&self) -> [<PyListOrItem $type>] {
+                //     [<PyListOrItem $type>] {
+                //         inner: self.inner.then.clone(),
+                //     }
+                // }
 
                 #[getter]
-                pub fn else_value(&self) -> [<PyListOrItem $type>] {
-                    [<PyListOrItem $type>] {
-                        inner: self.inner.else_value.clone(),
+                pub fn then_value(&self, py: Python) -> Py<[<PyListOrItem $type>]> {
+                    // let py_list = PyList::empty(py);
+                    // for item in &self.inner.then.0 {
+                    //     let py_item: $py_type = item.clone().into();
+                    //     let py_item = Py::new(py, py_item).unwrap();
+                    //     py_list.append(py_item).unwrap();
+                    // }
+                    // py_list.into()
+
+                    // py_list.into()
+
+                    self.then.clone()
+                }
+
+                // #[getter]
+                // pub fn else_value(&self) -> [<PyListOrItem $type>] {
+                //     [<PyListOrItem $type>] {
+                //         inner: self.inner.else_value.clone(),
+                //     }
+                // }
+
+                pub fn __eq__(&self, py: Python, other: &Self) -> bool {
+
+                    let then_value = self.then.borrow(py).clone();
+
+                    let other_then_value = other.then.borrow(py).clone();
+
+                    self.condition == other.condition
+                        && then_value == other_then_value
+                        // && self.then == other.then
+                        // && self.else_value == other.else_value
+                }
+
+            }
+
+            impl $name {
+                pub fn from_conditional(
+                    py: Python,
+                    conditional: Conditional<$type>,
+                ) -> Self {
+                    let py_list_or_item: [<PyListOrItem $type>] = conditional.then.clone().into();
+                    let py_list_or_item_else: [<PyListOrItem $type>] = conditional.else_value.clone().into();
+
+                    let then_value = Py::new(py, py_list_or_item).unwrap();
+                    let else_value = Py::new(py, py_list_or_item_else).unwrap();
+
+                    Self {
+                        condition: conditional.condition,
+                        then: then_value,
+                        else_value,
                     }
                 }
             }
 
-            impl From<Conditional<$type>> for $name {
-                fn from(inner: Conditional<$type>) -> Self {
-                    $name { inner }
+
+
+            // impl From<Conditional<$type>> for $name {
+            //     fn from(inner: Conditional<$type>) -> Self {
+            //         $name { inner: }
+            //     }
+            // }
+
+            impl Display for $name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}", self.condition)
                 }
             }
         }
     };
 }
 
-create_conditional_interface!(PyConditionalString, String);
-create_conditional_interface!(PyConditionalPackageDependency, PackageDependency);
+create_conditional_interface!(PyConditionalString, String, PyWrapString);
+create_conditional_interface!(
+    PyConditionalPackageDependency,
+    PackageDependency,
+    PyPackageDependency
+);
 
-create_conditional_interface!(PyConditionalSource, Source);
+create_conditional_interface!(PyConditionalSource, Source, PySource);
 
 impl<'a> TryFrom<Bound<'a, PyAny>> for PyItemPackageDependency {
     type Error = PyErr;
@@ -240,25 +480,19 @@ impl<'a> TryFrom<Bound<'a, PyAny>> for PyItemPackageDependency {
     }
 }
 
-// impl From<Conditional<String>> for PyConditionalString {
-//     fn from(conditional: Conditional<String>) -> Self {
-//         PyConditionalString { inner: conditional }
+// impl From<PyConditionalString> for Conditional<String> {
+//     fn from(py_conditional: PyConditionalString) -> Self {
+//         py_conditional.inner
 //     }
 // }
 
-impl From<PyConditionalString> for Conditional<String> {
-    fn from(py_conditional: PyConditionalString) -> Self {
-        py_conditional.inner
-    }
-}
-
-impl From<ListOrItem<String>> for PyListOrItemString {
-    fn from(list_or_item: ListOrItem<String>) -> Self {
-        PyListOrItemString {
-            inner: list_or_item,
-        }
-    }
-}
+// impl From<ListOrItem<String>> for PyListOrItemString {
+//     fn from(list_or_item: ListOrItem<String>) -> Self {
+//         PyListOrItemString {
+//             inner: list_or_item,
+//         }
+//     }
+// }
 
 impl From<PyListOrItemString> for ListOrItem<String> {
     fn from(py_list_or_item: PyListOrItemString) -> Self {

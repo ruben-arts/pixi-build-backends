@@ -19,6 +19,7 @@ from pixi_build_backend.pixi_build_backend import (
     PyItemPackageDependency,
     PyItemString,
 )
+from pixi_build_backend.types.conditional import ConditionalPackageDepedency
 from pixi_build_backend.types.platform import Platform
 from pixi_build_backend.types.requirements import PackageDependency
 
@@ -802,8 +803,11 @@ class ItemPackageDependency:
     def template(self) -> Optional[str]:
         """Get the template string if this is a template."""
         return self._inner.template()
-
-
+    
+    @property
+    def conditional(self) -> Optional[ConditionalPackageDepedency]:
+        """Get the conditional string if this is a conditional."""
+        return self._inner.conditional()
 
 
 class ItemString:

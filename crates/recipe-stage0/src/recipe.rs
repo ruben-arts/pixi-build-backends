@@ -9,7 +9,7 @@ use crate::matchspec::{PackageDependency, SerializableMatchSpec};
 use crate::requirements::PackageSpecDependencies;
 
 // Core enum for values that can be either concrete or templated
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum Value<T> {
     Concrete(T),
@@ -283,7 +283,7 @@ impl<T> ListOrItem<T> {
 }
 
 // Conditional structure for if-else logic
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Conditional<T> {
     #[serde(rename = "if")]
     pub condition: String,
@@ -365,7 +365,7 @@ impl Display for Package {
 }
 
 /// Source information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum Source {
     /// Url source pointing to a tarball or similar to retrieve the source from
@@ -453,13 +453,13 @@ impl Display for Source {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct UrlSource {
     pub url: Value<String>,
     pub sha256: Option<Value<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct PathSource {
     pub path: Value<String>,
     pub sha256: Option<Value<String>>,

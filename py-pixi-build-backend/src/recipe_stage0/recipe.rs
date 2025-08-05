@@ -345,6 +345,12 @@ impl From<Source> for PySource {
     }
 }
 
+impl From<PySource> for Source {
+    fn from(py_source: PySource) -> Self {
+        py_source.inner
+    }
+}
+
 #[pyclass]
 #[derive(Clone)]
 pub struct PyUrlSource {
