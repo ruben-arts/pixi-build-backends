@@ -47,19 +47,24 @@ mod test {
         let context = BuildScriptContext {
             build_platform,
             source_dir: String::from("my-prefix-dir"),
-            extra_args,
+            extra_args: extra_args.clone(),
             has_host_python,
         };
         let script = context.render();
 
         let mut settings = insta::Settings::clone_current();
         settings.set_snapshot_suffix(format!(
-            "{}-{}",
+            "{}-{}-{}",
             build_platform,
             if has_host_python {
                 "python"
             } else {
                 "nopython"
+            },
+            if extra_args.is_empty(){
+                "no-extra-args"
+            } else {
+                "with-extra-args"
             }
         ));
         settings.bind(|| {
