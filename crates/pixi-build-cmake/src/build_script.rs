@@ -42,11 +42,12 @@ mod test {
     fn test_build_script(
         #[values(BuildPlatform::Windows, BuildPlatform::Unix)] build_platform: BuildPlatform,
         #[values(true, false)] has_host_python: bool,
+        #[values(vec![String::from("test-arg")], vec![])] extra_args: Vec<String>,
     ) {
         let context = BuildScriptContext {
             build_platform,
             source_dir: String::from("my-prefix-dir"),
-            extra_args: vec![],
+            extra_args,
             has_host_python,
         };
         let script = context.render();

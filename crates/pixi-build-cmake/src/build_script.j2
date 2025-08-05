@@ -17,7 +17,7 @@
     "-DCMAKE_INSTALL_PREFIX=" ~ library_prefix,
     "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
     "-DBUILD_SHARED_LIBS=ON",
-]
+] + extra_args
 -%}
 
 {# Add Python executable if available -#}

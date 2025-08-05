@@ -1,6 +1,7 @@
 ---
 source: crates/pixi-build-cmake/src/build_script.rs
 expression: "script.join(\"\\n\")"
+snapshot_kind: text
 ---
 ninja --version
 cmake --version
