@@ -20,6 +20,7 @@ pixi-build-backend = { workspace = true }
 pixi_build_types = { workspace = true }
 
 recipe-stage0 = { workspace = true }
+tracing = "0.1.41"
 
 
 [dev-dependencies]

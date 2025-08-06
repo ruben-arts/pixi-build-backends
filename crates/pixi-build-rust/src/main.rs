@@ -11,6 +11,7 @@ use build_script::BuildScriptContext;
 use cargo_toml::{Error as CargoTomlError, Manifest};
 use config::RustBackendConfig;
 use miette::IntoDiagnostic;
+use pixi_build_backend::generated_recipe::{MetadataProvider, MetadataProviderError};
 use pixi_build_backend::{
     cache::{sccache_envs, sccache_tools},
     compilers::{Language, compiler_requirement},
@@ -18,8 +19,8 @@ use pixi_build_backend::{
     intermediate_backend::IntermediateBackendInstantiator,
 };
 use pixi_build_types::ProjectModelV1;
-use rattler_conda_types::{PackageName, Platform};
-use recipe_stage0::recipe::Value;
+use rattler_conda_types::{PackageName, Platform, Version};
+use recipe_stage0::recipe::{About, Value};
 use recipe_stage0::{
     matchspec::PackageDependency,
     recipe::{Item, Script},
@@ -30,6 +31,77 @@ use std::str::FromStr;
 #[derive(Default, Clone)]
 pub struct RustGenerator {}
 
+pub struct CargoMetadataProvider {
+    cargo_manifest: Manifest,
+}
+impl MetadataProvider for CargoMetadataProvider {
+    fn name(&self) -> Result<String, MetadataProviderError> {
+        if let Some(package) = &self.cargo_manifest.package {
+            Ok(package.name.clone().to_string())
+        } else {
+            Err(MetadataProviderError::CannotProvideName)
+        }
+    }
+    fn version(&self) -> Result<Version, MetadataProviderError> {
+        if let Some(package) = &self.cargo_manifest.package {
+            if let Ok(version) = &package.version.get() {
+                Version::from_str(version).map_err(|e| MetadataProviderError::CannotParseVersion(e))
+            } else {
+                Err(MetadataProviderError::CannotProvideVersion)
+            }
+        } else {
+            Err(MetadataProviderError::CannotProvideVersion)
+        }
+    }
+
+    fn about(&self) -> Option<About> {
+        // Macro to simplify setting values
+        macro_rules! set_str {
+            ($target:expr, $source:expr) => {
+                if $target.is_none() {
+                    if let Some(val) = &$source {
+                        if let Ok(val) = val.get() {
+                            $target = Some(Value::from_str(val.as_str()).unwrap());
+                        }
+                    }
+                }
+            };
+        }
+
+        // About section
+        if let Some(cargo_package) = &self.cargo_manifest.package {
+            let mut about = About::default();
+            set_str!(about.description, cargo_package.description);
+            set_str!(about.documentation, cargo_package.documentation);
+            set_str!(about.repository, cargo_package.repository);
+            set_str!(about.license, cargo_package.license);
+            set_str!(about.homepage, cargo_package.homepage);
+
+            if about.license_file.is_none() {
+                // If license file is not set, use the first license file from the package
+                if let Some(license_file) = &cargo_package.license_file {
+                    if let Ok(license_file) = license_file.get() {
+                        about.license_file = Some(
+                            Value::from_str(license_file.to_string_lossy().to_string().as_str())
+                                .unwrap(),
+                        );
+                    }
+                }
+            }
+
+            // If summary is not set, use the package description as a fallback.
+            if about.summary.is_none() {
+                if let Some(description) = &cargo_package.description {
+                    if let Ok(description) = description.get() {
+                        about.summary = Some(Value::from_str(description.as_str()).unwrap());
+                    }
+                }
+            }
+            return Some(about);
+        }
+        None
+    }
+}
 impl GenerateRecipe for RustGenerator {
     type Config = RustBackendConfig;
 
@@ -41,7 +113,22 @@ impl GenerateRecipe for RustGenerator {
         host_platform: Platform,
         _python_params: Option<PythonParams>,
     ) -> miette::Result<GeneratedRecipe> {
-        let mut generated_recipe = GeneratedRecipe::from_model(model.clone());
+        let mut generated_recipe: GeneratedRecipe;
+
+        if config.ignore_cargo_manifest.is_some_and(|ignore| ignore) {
+            generated_recipe =
+                GeneratedRecipe::from_model(model.clone(), None::<CargoMetadataProvider>)
+                    .into_diagnostic()?;
+        } else {
+            // Get the Cargo manifest from the manifest root
+            let cargo_manifest = get_cargo_manifest(&manifest_root)
+                .into_diagnostic()
+                .map_err(|e| miette::miette!("Failed to parse Cargo.toml: {e}"))?;
+            
+            let provider = CargoMetadataProvider { cargo_manifest };
+            generated_recipe =
+                GeneratedRecipe::from_model(model.clone(), Some(provider)).into_diagnostic()?;
+        }
 
         // we need to add compilers
         let compiler_function = compiler_requirement(&Language::Rust);
@@ -49,11 +136,6 @@ impl GenerateRecipe for RustGenerator {
         let requirements = &mut generated_recipe.recipe.requirements;
 
         let resolved_requirements = requirements.resolve(Some(host_platform));
-
-        // Get the Cargo manifest from the manifest root
-        let cargo_manifest = get_cargo_manifest(&manifest_root)
-            .into_diagnostic()
-            .map_err(|e| miette::miette!("Failed to parse Cargo.toml: {e}"))?;
 
         // Mix the Cargo manifest with the recipe
 
@@ -162,72 +244,6 @@ fn get_cargo_manifest(manifest_root: &PathBuf) -> Result<Manifest, CargoTomlErro
     })
 }
 
-fn merge_cargo_manifest_with_recipe(manifest: Manifest, recipe: &mut GeneratedRecipe) {
-    // About section
-    if let Some(package) = manifest.package {
-        // Create about if missing
-        let about = recipe.recipe.about.get_or_insert_with(Default::default);
-
-        // Only set values if they are not already set
-        if about.description.is_none() {
-            if let Some(desc) = &package.description {
-                if let Ok(desc) = desc.get() {
-                    about.description = Some(Value::from_str(desc.as_str()).unwrap());
-                }
-            }
-        }
-
-        if about.documentation.is_none() {
-            if let Some(doc) = &package.documentation {
-                if let Ok(doc) = doc.get() {
-                    about.documentation = Some(Value::from_str(doc.as_str()).unwrap());
-                }
-            }
-        }
-
-        if about.repository.is_none() {
-            if let Some(repo) = &package.repository {
-                if let Ok(repo) = repo.get() {
-                    about.repository = Some(Value::from_str(repo.as_str()).unwrap());
-                }
-            }
-        }
-        if about.license.is_none() {
-            if let Some(license) = &package.license {
-                if let Ok(license) = license.get() {
-                    about.license = Some(Value::from_str(license.as_str()).unwrap());
-                }
-            }
-        }
-        if about.license_file.is_none() {
-            if let Some(license_file) = &package.license_file {
-                if let Ok(license_file) = license_file.get() {
-                    about.license_file = Some(
-                        Value::from_str(license_file.to_string_lossy().to_string().as_str())
-                            .unwrap(),
-                    );
-                }
-            }
-        }
-
-        if about.homepage.is_none() {
-            if let Some(homepage) = &package.homepage {
-                if let Ok(homepage) = homepage.get() {
-                    about.homepage = Some(Value::from_str(homepage.as_str()).unwrap());
-                }
-            }
-        }
-        // If summary is not set, use the package description as a fallback.
-        if about.summary.is_none() {
-            if let Some(description) = &package.description {
-                if let Ok(description) = description.get() {
-                    about.summary = Some(Value::from_str(description.as_str()).unwrap());
-                }
-            }
-        }
-    }
-}
-
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
@@ -242,7 +258,6 @@ pub async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use cargo_toml::Package;
     use indexmap::IndexMap;
 
     use super::*;
@@ -302,7 +317,7 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default(),
+                &RustBackendConfig::default_with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -343,7 +358,7 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default(),
+                &RustBackendConfig::default_with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -381,6 +396,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig {
                     env: env.clone(),
+                    ignore_cargo_manifest: Some(true),
                     ..Default::default()
                 },
                 PathBuf::from("."),
@@ -423,6 +439,7 @@ mod tests {
                     &project_model,
                     &RustBackendConfig {
                         env,
+                        ignore_cargo_manifest: Some(true),
                         ..Default::default()
                     },
                     PathBuf::from("."),
@@ -439,21 +456,10 @@ mod tests {
         ".build.script.content" => "[ ... script ... ]",
         });
     }
-
     #[test]
-    fn test_manifest_parsing() {
-        let current_dir = std::env::current_dir().unwrap();
-        let package_manifest_path = current_dir.join("Cargo.toml");
-
-        let mut manifest = Manifest::from_path(&package_manifest_path).unwrap();
-
-        manifest.complete_from_path(&package_manifest_path).unwrap();
-
-        eprintln!("{manifest:#?}");
-
+    fn test_with_cargo_manifest() {
         let project_model = project_fixture!({
-            "name": "foobar",
-            "version": "0.1.0",
+            "name": "",
             "targets": {
                 "default_target": {
                     "run_dependencies": {
@@ -463,12 +469,42 @@ mod tests {
             }
         });
 
-        let mut generated_recipe = GeneratedRecipe::from_model(project_model.clone());
-
-        // Merge the Cargo manifest with the recipe
-        merge_cargo_manifest_with_recipe(manifest, &mut generated_recipe);
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig::default(),
+                // Using this crate itself, as it has interesting metadata, using .workspace
+                std::env::current_dir().unwrap(),
+                Platform::Linux64,
+                None,
+            )
+            .expect("Failed to generate recipe");
 
         // Verify that the about section is populated correctly
-        eprintln!("{:#?}", generated_recipe.recipe.about);
+        eprintln!("{:#?}", generated_recipe.recipe);
+        
+        // Manually load the Cargo manifest to ensure it works
+        let current_dir = std::env::current_dir().unwrap();
+        let package_manifest_path = current_dir.join("Cargo.toml");
+        let mut manifest = Manifest::from_path(&package_manifest_path).unwrap();
+        manifest.complete_from_path(&package_manifest_path).unwrap();
+        
+        assert_eq!(manifest.clone().package.unwrap().name.clone(), generated_recipe.recipe.package.name.to_string());
+        assert_eq!(
+            *manifest.clone().package.unwrap().version.get().unwrap(),
+            generated_recipe.recipe.package.version.to_string()
+        );
+        assert_eq!(
+            *manifest.clone().package.unwrap().description.unwrap().get().unwrap(),
+            generated_recipe.recipe.about.as_ref().and_then(|a| a.description.clone()).unwrap().to_string()
+        );
+        assert_eq!(
+            *manifest.clone().package.unwrap().license.unwrap().get().unwrap(),
+            generated_recipe.recipe.about.as_ref().and_then(|a| a.license.clone()).unwrap().to_string()
+        );
+        assert_eq!(
+            *manifest.clone().package.unwrap().repository.unwrap().get().unwrap(),
+            generated_recipe.recipe.about.as_ref().and_then(|a| a.repository.clone()).unwrap().to_string()
+        );
     }
 }

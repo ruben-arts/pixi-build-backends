@@ -3,13 +3,13 @@ use std::{
     fmt::Debug,
     path::{Path, PathBuf},
 };
-
+use miette::Diagnostic;
 use pixi_build_types::ProjectModelV1;
 use rattler_build::{NormalizedKey, recipe::variable::Variable};
-use rattler_conda_types::Platform;
-use recipe_stage0::recipe::{IntermediateRecipe, Package, Value};
+use rattler_conda_types::{Platform, Version};
+use recipe_stage0::recipe::{About, IntermediateRecipe, Package, Value};
 use serde::de::DeserializeOwned;
-
+use thiserror::Error;
 use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
 
 #[derive(Debug, Clone, Default)]
@@ -82,6 +82,14 @@ pub trait BackendConfig: DeserializeOwned + Clone {
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self>;
 }
 
+#[derive(Debug, Error, Diagnostic)]
+pub enum GenerateRecipeError {   
+    #[error("There was no name defined for the recipe")]
+    NoNameDefined,
+    #[error("There was no version defined for the recipe")]
+    NoVersionDefined,
+}
+
 #[derive(Default, Clone)]
 pub struct GeneratedRecipe {
     pub recipe: IntermediateRecipe,
@@ -93,28 +101,68 @@ impl GeneratedRecipe {
     /// Creates a new [`GeneratedRecipe`] from a [`ProjectModelV1`].
     /// A default implementation that doesn't take into account the
     /// build scripts or other fields.
-    pub fn from_model(model: ProjectModelV1) -> Self {
+    pub fn from_model(model: ProjectModelV1, provider: Option<impl MetadataProvider>) -> Result<Self, GenerateRecipeError> {
+        let version = model.version
+            .or_else(|| provider.as_ref().and_then(|p| p.version().ok()))
+            .ok_or(GenerateRecipeError::NoVersionDefined)?;
+
+        let name = if model.name.is_empty() {
+            if let Ok(name) = provider
+                .as_ref()
+                .map(|p| p.name())
+                .ok_or(GenerateRecipeError::NoNameDefined)?{
+                name
+            } else {
+                return Err(GenerateRecipeError::NoNameDefined);
+            }
+        } else {
+            model.name
+        };
+
         let package = Package {
-            name: Value::Concrete(model.name),
-            version: Value::Concrete(
-                model.version
-                  .expect("`version` is required at the moment. In the future we will read this from `Cargo.toml`.")
-                  .to_string(),
-            ),
+            name: Value::Concrete(name),
+            version: Value::Concrete(version.to_string()),
         };
 
         let requirements =
             from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
-
+        
+        let about = provider
+            .as_ref()
+            .and_then(|p| p.about());
+        
         let ir = IntermediateRecipe {
             package,
             requirements,
+            about,
             ..Default::default()
         };
 
-        GeneratedRecipe {
+        Ok(GeneratedRecipe {
             recipe: ir,
             ..Default::default()
-        }
+        })
     }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum MetadataProviderError{
+    #[error("The metadata provider cannot provide a name for the recipe")]
+    CannotProvideName,
+    #[error("The metadata provider cannot provide a version for the recipe")]
+    CannotProvideVersion,
+    #[error("The metadata provider cannot provide an about section for the recipe")]
+    CannotParseVersion(#[from] rattler_conda_types::ParseVersionError),
+}
+
+pub trait MetadataProvider {
+    /// Returns the name of the metadata provider.
+    /// This is used to identify the provider in the recipe.
+    fn name(&self) -> Result<String, MetadataProviderError>;
+    
+    /// Returns the version of the metadata provider.
+    fn version(&self) -> Result<Version, MetadataProviderError>;
+    
+    /// Returns an optional [`About`] section for the recipe.
+    fn about(&self) -> Option<About>;
 }

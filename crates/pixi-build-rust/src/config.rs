@@ -23,6 +23,16 @@ pub struct RustBackendConfig {
     pub ignore_cargo_manifest: Option<bool>,
 }
 
+impl RustBackendConfig {
+    /// Creates a new [`RustBackendConfig`] with default values.
+    pub fn default_with_ignore_cargo_manifest() -> Self {
+        Self {
+            ignore_cargo_manifest: Some(true),
+            ..Default::default()
+        }
+    }
+}
+
 impl BackendConfig for RustBackendConfig {
     fn debug_dir(&self) -> Option<&Path> {
         self.debug_dir.as_deref()
