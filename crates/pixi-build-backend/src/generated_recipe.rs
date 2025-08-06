@@ -73,9 +73,13 @@ pub trait GenerateRecipe {
     }
 }
 
-/// At least debug dir should be provided by the backend config
-pub trait BackendConfig: DeserializeOwned {
+pub trait BackendConfig: DeserializeOwned + Clone {
+    /// At least debug dir should be provided by the backend config
     fn debug_dir(&self) -> Option<&Path>;
+
+    /// Merge this configuration with a target-specific configuration.
+    /// Target-specific values typically override base values.
+    fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self>;
 }
 
 #[derive(Default, Clone)]

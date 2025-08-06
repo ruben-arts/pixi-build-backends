@@ -73,6 +73,7 @@ where
             manifest_path,
             project_model: project_model.map(Into::into),
             configuration: None,
+            target_configuration: None,
             cache_directory: None,
         })
         .await
@@ -81,6 +82,7 @@ where
         let current_dir = std::env::current_dir().unwrap();
         let result = protocol
             .conda_outputs(CondaOutputsParams {
+                channels: vec![],
                 host_platform,
                 build_platform: host_platform,
                 variant_configuration,

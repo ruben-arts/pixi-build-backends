@@ -1,6 +1,5 @@
 [package]
 name = "pixi-build-api-version"
-version = "1"
 
-[package.build.backend]
-name = "rattler-build-backend"
+[package.build]
+backend = { name = "pixi-build-rattler-build", version = "*" }

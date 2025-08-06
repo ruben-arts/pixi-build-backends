@@ -55,6 +55,9 @@ fi;
 # So we compute the relative path of $SP_DIR w.r.t. to $PREFIX,
 # but it is not trivial to do this in bash scripting, so let's do it via python
 echo "Using PREFIX: $PREFIX"
+# TODO: Remove when SPD_DIR is available in the environment
+export SP_DIR=${SP_DIR:-$PREFIX/lib/python3.12/site-packages}
+export PY_VER=3.12
 echo "Using SP_DIR: $SP_DIR"
 echo "Using CONDA_BUILD: $CONDA_BUILD"
 echo "Using CPU_COUNT: $CPU_COUNT"

@@ -353,6 +353,7 @@ mod tests {
             manifest_path: PathBuf::from("pixi.toml"),
             project_model: Some(project_model.into()),
             configuration: None,
+            target_configuration: None,
             cache_directory: None,
         })
         .await
@@ -362,6 +363,7 @@ mod tests {
         let outputs = factory
             .0
             .conda_outputs(CondaOutputsParams {
+                channels: vec![],
                 host_platform: Platform::Win64,
                 build_platform: Platform::Win64,
                 variant_configuration: None,

@@ -20,9 +20,9 @@ mod imp {
     use pixi_build_backend::generated_recipe::{
         BackendConfig, GenerateRecipe, GeneratedRecipe, PythonParams,
     };
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, Default, Deserialize, Clone)]
+    #[derive(Debug, Default, Serialize, Deserialize, Clone)]
     #[serde(rename_all = "kebab-case")]
     pub struct TestBackendConfig {
         /// If set, internal state will be logged as files in that directory
@@ -36,6 +36,16 @@ mod imp {
     impl BackendConfig for TestBackendConfig {
         fn debug_dir(&self) -> Option<&Path> {
             self.debug_dir.as_deref()
+        }
+
+        fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
+            if target_config.debug_dir.is_some() {
+                miette::bail!("`debug_dir` cannot have a target specific value");
+            }
+
+            Ok(Self {
+                debug_dir: self.debug_dir.clone(),
+            })
         }
     }
 
@@ -98,12 +108,15 @@ async fn test_conda_get_metadata() {
         "debug-dir": "some_debug_dir",
     });
 
+    let target_config = Default::default();
+
     let intermediate_backend = IntermediateBackend::<TestGenerateRecipe>::new(
         pixi_manifest.clone(),
         Some(tmp_dir_path.clone()),
         project_model_v1,
         Arc::default(),
         some_config,
+        target_config,
         LoggingOutputHandler::default(),
         None,
     )
@@ -158,12 +171,15 @@ async fn test_conda_build() {
         "debug-dir": "some_debug_dir",
     });
 
+    let target_config = Default::default();
+
     let intermediate_backend: IntermediateBackend<TestGenerateRecipe> = IntermediateBackend::new(
         pixi_manifest.clone(),
         Some(tmp_dir_path.clone()),
         project_model_v1,
         Arc::default(),
         some_config,
+        target_config,
         LoggingOutputHandler::default(),
         None,
     )
