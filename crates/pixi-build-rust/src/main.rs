@@ -121,8 +121,11 @@ impl GenerateRecipe for RustGenerator {
             })
         };
 
-        let mut generated_recipe =
-            GeneratedRecipe::from_model(model.clone(), provider).into_diagnostic()?;
+        let mut generated_recipe = GeneratedRecipe::from_model(
+            model.clone(),
+            provider.map(|p| Box::new(p) as Box<dyn MetadataProvider>),
+        )
+        .into_diagnostic()?;
 
         // we need to add compilers
         let compiler_function = compiler_requirement(&Language::Rust);

@@ -103,7 +103,7 @@ impl GeneratedRecipe {
     /// build scripts or other fields.
     pub fn from_model(
         model: ProjectModelV1,
-        provider: Option<impl MetadataProvider>,
+        provider: Option<Box<dyn MetadataProvider>>,
     ) -> Result<Self, GenerateRecipeError> {
         // If the name is not defined in the model, we try to get it from the provider.
         // If the provider cannot provide a name, we return an error.
