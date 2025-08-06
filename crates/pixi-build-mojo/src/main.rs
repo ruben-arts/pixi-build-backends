@@ -32,7 +32,8 @@ impl GenerateRecipe for MojoGenerator {
         host_platform: rattler_conda_types::Platform,
         _python_params: Option<PythonParams>,
     ) -> miette::Result<GeneratedRecipe> {
-        let mut generated_recipe = GeneratedRecipe::from_model(model.clone(), None).into_diagnostic()?;
+        let mut generated_recipe =
+            GeneratedRecipe::from_model(model.clone(), None).into_diagnostic()?;
 
         let cleaned_project_name = clean_project_name(
             generated_recipe

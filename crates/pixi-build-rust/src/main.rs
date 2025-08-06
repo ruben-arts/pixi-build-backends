@@ -134,8 +134,6 @@ impl GenerateRecipe for RustGenerator {
 
         let resolved_requirements = requirements.resolve(Some(host_platform));
 
-        // Mix the Cargo manifest with the recipe
-
         // Ensure the compiler function is added to the build requirements
         // only if it is not already present.
 
@@ -190,6 +188,12 @@ impl GenerateRecipe for RustGenerator {
             // only if they are not already present
             let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
 
+            requirements.build.extend(
+                sccache_dep
+                    .into_iter()
+                    .filter(|dep| !existing_reqs.contains(dep)),
+            );
+            
             has_sccache = true;
         }
 

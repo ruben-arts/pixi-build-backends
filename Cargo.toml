@@ -6,7 +6,6 @@ resolver = "2"
 edition = "2024"
 repository = "https://github.com/prefix-dev/pixi-build-backends"
 license = "BSD-3"
-license-file = "LICENSE"
 
 
 [workspace.dependencies]

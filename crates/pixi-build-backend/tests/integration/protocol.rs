@@ -15,12 +15,12 @@ use url::Url;
 
 #[cfg(test)]
 mod imp {
-    use std::path::{Path, PathBuf};
     use miette::IntoDiagnostic;
     use pixi_build_backend::generated_recipe::{
         BackendConfig, GenerateRecipe, GeneratedRecipe, PythonParams,
     };
     use serde::{Deserialize, Serialize};
+    use std::path::{Path, PathBuf};
 
     #[derive(Debug, Default, Serialize, Deserialize, Clone)]
     #[serde(rename_all = "kebab-case")]
