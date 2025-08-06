@@ -33,8 +33,7 @@ permissions:
   contents: read
 
 jobs:
-  create-tag:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+  setup-release:
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.set_backend.outputs.backend }}
@@ -52,6 +51,7 @@ jobs:
           TAG="${BACKEND}-v${{ github.event.inputs.version }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
       - name: Install cargo edit
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           pixi run cargo-set-version set-version --package ${{ steps.set_backend.outputs.backend }} ${{ github.event.inputs.version }}
       - name: Show changes
@@ -66,6 +66,7 @@ jobs:
           git push origin HEAD:${{ github.ref_name }}
 
   generate-matrix:
+    needs: [setup-release]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set_version.outputs.matrix }}
@@ -132,7 +133,7 @@ jobs:
           path: conda-artifacts-${{ matrix.target }}/**/*.conda
 
   upload:
-    needs: [aggregate, create-tag]
+    needs: [aggregate, setup-release]
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags') && github.repository == 'prefix-dev/pixi-build-backends' }}
     steps:
@@ -157,5 +158,5 @@ jobs:
       - name: Tag release
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          git tag -a "${{ needs.create-tag.outputs.tag }}" -m "Release ${{ needs.create-tag.outputs.tag }}"
-          git push origin "${{ needs.create-tag.outputs.tag }}"
+          git tag -a "${{ needs.setup-release.outputs.tag }}" -m "Release ${{ needs.setup-release.outputs.tag }}"
+          git push origin "${{ needs.setup-release.outputs.tag }}"
