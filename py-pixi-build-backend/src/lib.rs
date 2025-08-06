@@ -107,6 +107,8 @@ fn pixi_build_backend(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<recipe_stage0::conditional::PyItemString>()?;
     m.add_class::<recipe_stage0::conditional::PyItemPackageDependency>()?;
 
+    m.add_class::<recipe_stage0::conditional_requirements::PyVecItemPackageDependency>()?;
+
     m.add_class::<recipe_stage0::conditional::PyConditionalString>()?;
     m.add_class::<recipe_stage0::conditional::PyConditionalPackageDependency>()?;
     m.add_class::<recipe_stage0::conditional::PyConditionalSource>()?;

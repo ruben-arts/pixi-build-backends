@@ -40,6 +40,18 @@ macro_rules! create_py_item {
                     Ok($name { inner: item })
                 }
 
+                #[staticmethod]
+                pub fn new_from_conditional(
+                    py: Python,
+                    conditional: [<PyConditional $type>]
+                ) -> Self {
+
+                    let conditional = [<PyConditional $type>]::into_conditional(py, conditional);
+
+                    let item = Item::Conditional(conditional);
+                    $name { inner: item }
+                }
+
                 pub fn is_value(&self) -> bool {
                     matches!(self.inner, Item::Value(_))
                 }
@@ -72,13 +84,13 @@ macro_rules! create_py_item {
                     }
                 }
 
-                // pub fn conditional(&self) -> Option<[<PyConditional $type>]> {
-                //     if let Item::Conditional(cond) = &self.inner {
-                //         Some(cond.clone().into())
-                //     } else {
-                //         None
-                //     }
-                // }
+                pub fn conditional(&self, py: Python) -> Option<[<PyConditional $type>]> {
+                    if let Item::Conditional(cond) = &self.inner {
+                        Some([<PyConditional $type>]::from_conditional(py, cond.clone()))
+                    } else {
+                        None
+                    }
+                }
             }
 
             impl Display for $name {
@@ -158,7 +170,11 @@ macro_rules! create_pylist_or_item {
             pub fn is_list(&self) -> bool {
                 self.inner.len() > 1
             }
+        }
 
+        // Implementing the PyList interface
+        #[pymethods]
+        impl $name {
             pub fn __getitem__(&self, index: usize) -> PyResult<$py_type> {
                 Ok(Into::<$py_type>::into(
                     self.inner.0.get(index).cloned().unwrap(),
@@ -303,11 +319,6 @@ macro_rules! create_pylist_or_item {
                 }
                 Ok(py_list.into())
             }
-
-            // Do we really need a sort method here?
-            // pub fn sort(&mut self) {
-            //     self.inner.0.sort();
-            // }
         }
 
         impl From<ListOrItem<$type>> for $name {
@@ -339,7 +350,7 @@ create_py_wrap!(PyWrapString, String);
 macro_rules! create_conditional_interface {
     ($name: ident, $type: ident, $py_type: ident) => {
         paste::paste! {
-            #[pyclass(str)]
+            #[pyclass(str, get_all, set_all)]
             #[derive(Clone, Deserialize, Serialize)]
             pub struct $name {
                 // pub(crate) inner: Conditional<$type>,
@@ -381,7 +392,7 @@ macro_rules! create_conditional_interface {
                 // }
 
                 #[getter]
-                pub fn then_value(&self, py: Python) -> Py<[<PyListOrItem $type>]> {
+                pub fn then_value(&self) -> Py<[<PyListOrItem $type>]> {
                     // let py_list = PyList::empty(py);
                     // for item in &self.inner.then.0 {
                     //     let py_item: $py_type = item.clone().into();
@@ -405,13 +416,14 @@ macro_rules! create_conditional_interface {
                 pub fn __eq__(&self, py: Python, other: &Self) -> bool {
 
                     let then_value = self.then.borrow(py).clone();
-
                     let other_then_value = other.then.borrow(py).clone();
+
+                    let else_value = self.else_value.borrow(py).clone();
+                    let other_else_value = other.else_value.borrow(py).clone();
 
                     self.condition == other.condition
                         && then_value == other_then_value
-                        // && self.then == other.then
-                        // && self.else_value == other.else_value
+                        && else_value == other_else_value
                 }
 
             }
@@ -433,6 +445,43 @@ macro_rules! create_conditional_interface {
                         else_value,
                     }
                 }
+
+                pub fn into_conditional(
+                    py: Python,
+                    conditional: $name,
+                ) -> Conditional<$type> {
+                    let then_list_or_item = conditional.then.borrow(py).clone().inner;
+                    let else_value_list_or_item = conditional.else_value.borrow(py).clone().inner;
+
+                    let condition = conditional.condition.clone();
+
+                    Conditional::<$type> {
+                        condition,
+                        then: then_list_or_item,
+                        else_value: else_value_list_or_item,
+                    }
+                }
+
+                // pub fn into_conditional(
+                //     py: Python,
+                //     conditional: $name,
+                // ) -> Self {
+
+
+
+
+                //     let py_list_or_item: [<PyListOrItem $type>] = conditional.then.clone().into();
+                //     let py_list_or_item_else: [<PyListOrItem $type>] = conditional.else_value.clone().into();
+
+                //     let then_value = Py::new(py, py_list_or_item).unwrap();
+                //     let else_value = Py::new(py, py_list_or_item_else).unwrap();
+
+                //     Self {
+                //         condition: conditional.condition,
+                //         then: then_value,
+                //         else_value,
+                //     }
+                // }
             }
 
 

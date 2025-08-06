@@ -1,4 +1,5 @@
 use indexmap::IndexMap;
+use rattler_build::build;
 use rattler_conda_types::package::EntryPoint;
 use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,16 @@ impl From<SerializableMatchSpec> for Value<SerializableMatchSpec> {
 pub enum Item<T> {
     Value(Value<T>),
     Conditional(Conditional<T>),
+}
+
+impl<T> Item<T> {
+    pub fn new_from_conditional(condition: String, then: Vec<T>, else_value: Vec<T>) -> Self {
+        Item::Conditional(Conditional {
+            condition,
+            then: ListOrItem::new(then),
+            else_value: ListOrItem::new(else_value),
+        })
+    }
 }
 
 impl<T: Display> Display for Item<T> {
@@ -568,19 +579,21 @@ pub struct ConditionalRequirements {
 impl ConditionalRequirements {
     /// Resolves the conditional requirements for a given platform.
     pub fn resolve(
-        &self,
+        build: &ConditionalList<PackageDependency>,
+        host: &ConditionalList<PackageDependency>,
+        run: &ConditionalList<PackageDependency>,
+        run_constraints: &ConditionalList<PackageDependency>,
         platform: Option<Platform>,
     ) -> PackageSpecDependencies<PackageDependency> {
         PackageSpecDependencies {
-            build: self.resolve_list(&self.build, platform),
-            host: self.resolve_list(&self.host, platform),
-            run: self.resolve_list(&self.run, platform),
-            run_constraints: self.resolve_list(&self.run_constraints, platform),
+            build: Self::resolve_list(build, platform),
+            host: Self::resolve_list(host, platform),
+            run: Self::resolve_list(run, platform),
+            run_constraints: Self::resolve_list(run_constraints, platform),
         }
     }
 
     pub(crate) fn resolve_list(
-        &self,
         list: &ConditionalList<PackageDependency>,
         platform: Option<Platform>,
     ) -> IndexMap<PackageName, PackageDependency> {

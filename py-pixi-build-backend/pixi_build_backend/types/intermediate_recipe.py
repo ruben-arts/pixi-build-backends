@@ -19,7 +19,8 @@ from pixi_build_backend.pixi_build_backend import (
     PyItemPackageDependency,
     PyItemString,
 )
-from pixi_build_backend.types.conditional import ConditionalPackageDepedency
+from pixi_build_backend.types.conditional import ConditionalPackageDependency
+from pixi_build_backend.types.item import VecItemPackageDependency
 from pixi_build_backend.types.platform import Platform
 from pixi_build_backend.types.requirements import PackageDependency
 
@@ -622,14 +623,16 @@ class ConditionalRequirements:
         self._inner = PyConditionalRequirements()
 
     @property
-    def build(self) -> "ConditionalListPackageDependency":
+    def build(self) -> "VecItemPackageDependency":
         """Get the build requirements."""
-        return [ItemPackageDependency._from_inner(build) for build in self._inner.build]
+        return VecItemPackageDependency._from_inner(self._inner.build)
 
-    @build.setter
-    def build(self, value: "ConditionalListPackageDependency") -> None:
-        """Set the build requirements."""
-        self._inner.build = value
+        # return [ItemPackageDependency._from_inner(build) for build in self._inner.build]
+
+    # @build.setter
+    # def build(self, value: "ConditionalListPackageDependency") -> None:
+    #     """Set the build requirements."""
+    #     self._inner.build = value
 
     @property
     def host(self) -> "ConditionalListPackageDependency":
@@ -775,39 +778,7 @@ class PackageSpecDependencies:
         return self._inner.build
 
 
-class ItemPackageDependency:
-    """A package dependency item wrapper."""
 
-    _inner: PyItemPackageDependency
-
-    def __init__(self, name: str):
-        self._inner = PyItemPackageDependency(name)
-
-
-    @classmethod
-    def _from_inner(cls, inner: PyItemPackageDependency) -> "ItemPackageDependency":
-        """Create an ItemPackageDependency from a FFI PyItemPackageDependency."""
-        instance = cls.__new__(cls)
-        instance._inner = inner
-        return instance
-
-    def __str__(self):
-        return str(self._inner)
-    
-    @property
-    def concrete(self) -> "PackageDependency":
-        """Get the concrete package dependency."""
-        return self._inner.concrete()
-    
-    @property
-    def template(self) -> Optional[str]:
-        """Get the template string if this is a template."""
-        return self._inner.template()
-    
-    @property
-    def conditional(self) -> Optional[ConditionalPackageDepedency]:
-        """Get the conditional string if this is a conditional."""
-        return self._inner.conditional()
 
 
 class ItemString:

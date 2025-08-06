@@ -3,6 +3,7 @@ use crate::{
     error::PyPixiBuildBackendError,
     recipe_stage0::{
         conditional::{PyItemPackageDependency, PyItemSource, PyItemString},
+        conditional_requirements::PyVecItemPackageDependency,
         requirements::PyPackageSpecDependencies,
     },
     types::{PyPlatform, PyVecString},
@@ -17,9 +18,12 @@ use pyo3::{
     types::{PyList, PyListMethods},
 };
 use rattler_conda_types::package::EntryPoint;
-use recipe_stage0::recipe::{
-    About, Build, ConditionalRequirements, Extra, IntermediateRecipe, Item, NoArchKind, Package,
-    PathSource, Python as RecipePython, Script, Source, Test, UrlSource, Value,
+use recipe_stage0::{
+    matchspec::PackageDependency,
+    recipe::{
+        About, Build, ConditionalRequirements, Extra, IntermediateRecipe, Item, NoArchKind,
+        Package, PathSource, Python as RecipePython, Script, Source, Test, UrlSource, Value,
+    },
 };
 
 use std::fmt::{Display, Formatter};
@@ -124,7 +128,7 @@ impl PyIntermediateRecipe {
             package: Py::new(py, PyPackage::default())?,
             source: Py::new(py, PyVecItemSource::default())?,
             build: Py::new(py, PyBuild::new(py))?,
-            requirements: Py::new(py, PyConditionalRequirements::default())?,
+            requirements: Py::new(py, PyConditionalRequirements::new(py))?,
             tests: Py::new(py, PyVecTest::default())?,
             about: Py::new(py, PyOptionAbout::default())?,
             extra: Py::new(py, PyOptionExtra::default())?,
@@ -167,7 +171,8 @@ impl PyIntermediateRecipe {
         let py_build: PyBuild = PyBuild::from_build(py, recipe.build);
 
         // Convert requirements
-        let py_requirements: PyConditionalRequirements = recipe.requirements.into();
+        let py_requirements: PyConditionalRequirements =
+            PyConditionalRequirements::from_conditional_requirements(py, recipe.requirements);
 
         // Convert tests
         let py_tests: Vec<PyTest> = recipe.tests.into_iter().map(|test| test.into()).collect();
@@ -212,8 +217,12 @@ impl PyIntermediateRecipe {
             .collect();
 
         let build: Build = self.build.borrow(py).clone().into_build(py);
-        let requirements: ConditionalRequirements =
-            (*self.requirements.borrow(py).clone()).clone().into();
+        let requirements: ConditionalRequirements = self
+            .requirements
+            .borrow(py)
+            .clone()
+            .into_conditional_requirements(py);
+
         let tests: Vec<Test> = (*self.tests.borrow(py).clone())
             .clone()
             .into_iter()
@@ -809,130 +818,115 @@ macro_rules! create_py_value {
 create_py_value!(PyValueString, String);
 create_py_value!(PyValueU64, u64);
 
-#[pyclass(str)]
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[pyclass(str, get_all, set_all)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PyConditionalRequirements {
-    pub(crate) inner: ConditionalRequirements,
+    // pub(crate) inner: ConditionalRequirements,
+    // #[serde(default)]
+    pub(crate) build: Py<PyVecItemPackageDependency>,
+    // #[serde(default)]
+    pub(crate) host: Py<PyVecItemPackageDependency>,
+    // #[serde(default)]
+    pub(crate) run: Py<PyVecItemPackageDependency>,
+    // #[serde(default)]
+    pub(crate) run_constraints: Py<PyVecItemPackageDependency>,
 }
 
 #[pymethods]
 impl PyConditionalRequirements {
     #[new]
-    pub fn new() -> Self {
+    pub fn new(py: Python) -> Self {
+        let build = PyVecItemPackageDependency::new();
+        let host = PyVecItemPackageDependency::new();
+        let run = PyVecItemPackageDependency::new();
+        let run_constraints = PyVecItemPackageDependency::new();
+
         PyConditionalRequirements {
-            inner: ConditionalRequirements::default(),
+            build: Py::new(py, build).unwrap(),
+            host: Py::new(py, host).unwrap(),
+            run: Py::new(py, run).unwrap(),
+            run_constraints: Py::new(py, run_constraints).unwrap(),
         }
     }
 
-    #[getter]
-    // We erase the type here to return a list of PyItemPackageDependency
-    // which can be used in Python as list[PyItemPackageDependency]
-    pub fn build(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let list = PyList::empty(py);
-            for dep in &self.inner.build {
-                list.append(PyItemPackageDependency { inner: dep.clone() })?;
-            }
-            Ok(list.unbind())
-        })
-    }
+    pub fn resolve(
+        &self,
+        py: Python,
+        host_platform: Option<&PyPlatform>,
+    ) -> PyPackageSpecDependencies {
+        let build = self.build.borrow(py).clone();
+        // let build = *build;
 
-    #[getter]
-    pub fn host(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let list = PyList::empty(py);
-            for dep in &self.inner.host {
-                list.append(PyItemPackageDependency { inner: dep.clone() })?;
-            }
-            Ok(list.unbind())
-        })
-    }
+        // let build: Vec<Item<PackageDependency>> = *(self.build.borrow(py).clone());
+        let host = self.host.borrow(py).clone();
+        let run = self.run.borrow(py).clone();
+        let run_constraints = self.run_constraints.borrow(py).clone();
 
-    #[getter]
-    pub fn run(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let list = PyList::empty(py);
-            for dep in &self.inner.run {
-                list.append(PyItemPackageDependency { inner: dep.clone() })?;
-            }
-            Ok(list.unbind())
-        })
-    }
-
-    #[getter]
-    pub fn run_constraints(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let list = PyList::empty(py);
-            for dep in &self.inner.run_constraints {
-                list.append(PyItemPackageDependency { inner: dep.clone() })?;
-            }
-            Ok(list.unbind())
-        })
-    }
-
-    #[setter]
-    pub fn set_build(&mut self, build: Vec<Bound<'_, PyAny>>) -> PyResult<()> {
-        self.inner.build = build
-            .into_iter()
-            .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(())
-    }
-
-    #[setter]
-    pub fn set_host(&mut self, host: Vec<Bound<'_, PyAny>>) -> PyResult<()> {
-        self.inner.host = host
-            .into_iter()
-            .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(())
-    }
-
-    #[setter]
-    pub fn set_run(&mut self, run: Vec<Bound<'_, PyAny>>) -> PyResult<()> {
-        self.inner.run = run
-            .into_iter()
-            .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(())
-    }
-
-    #[setter]
-    pub fn set_run_constraints(&mut self, run_constraints: Vec<Bound<'_, PyAny>>) -> PyResult<()> {
-        self.inner.run_constraints = run_constraints
-            .into_iter()
-            .map(|item| Ok(PyItemPackageDependency::try_from(item)?.inner))
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(())
-    }
-
-    pub fn resolve(&self, host_platform: Option<&PyPlatform>) -> PyPackageSpecDependencies {
         let platform = host_platform.map(|p| p.inner);
 
-        let resolved = self.inner.resolve(platform);
+        let resolved = ConditionalRequirements::resolve(
+            &build.inner,
+            &host.inner,
+            &run.inner,
+            &run_constraints.inner,
+            platform,
+        );
 
         resolved.into()
     }
 }
 
-impl From<ConditionalRequirements> for PyConditionalRequirements {
-    fn from(requirements: ConditionalRequirements) -> Self {
-        PyConditionalRequirements {
-            inner: requirements,
+impl PyConditionalRequirements {
+    pub fn into_conditional_requirements(self, py: Python) -> ConditionalRequirements {
+        ConditionalRequirements {
+            build: (self.build.borrow(py).clone())
+                .inner
+                .clone()
+                .into_iter()
+                .collect(),
+            host: (self.host.borrow(py).clone())
+                .inner
+                .clone()
+                .into_iter()
+                .collect(),
+            run: (self.run.borrow(py).clone())
+                .inner
+                .clone()
+                .into_iter()
+                .collect(),
+            run_constraints: (self.run_constraints.borrow(py).clone())
+                .inner
+                .clone()
+                .into_iter()
+                .collect(),
         }
     }
-}
 
-impl Deref for PyConditionalRequirements {
-    type Target = ConditionalRequirements;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+    pub fn from_conditional_requirements(
+        py: Python,
+        requirements: ConditionalRequirements,
+    ) -> Self {
+        let build: PyVecItemPackageDependency = requirements.build.into();
+        let host: PyVecItemPackageDependency = requirements.host.into();
+        let run: PyVecItemPackageDependency = requirements.run.into();
+        let run_constraints: PyVecItemPackageDependency = requirements.run_constraints.into();
+
+        PyConditionalRequirements {
+            build: Py::new(py, build).unwrap(),
+            host: Py::new(py, host).unwrap(),
+            run: Py::new(py, run).unwrap(),
+            run_constraints: Py::new(py, run_constraints).unwrap(),
+        }
     }
 }
 
 impl Display for PyConditionalRequirements {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{ {} }}", self.inner)
+        write!(f, "{{ build: {} }}", self.build)?;
+        write!(f, "{{ host: {} }}", self.host)?;
+        write!(f, "{{ run: {} }}", self.run)?;
+        write!(f, "{{ run_constraints: {} }}", self.run_constraints)?;
+        Ok(())
     }
 }
 
