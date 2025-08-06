@@ -45,7 +45,7 @@ impl MetadataProvider for CargoMetadataProvider {
     fn version(&self) -> Result<Version, MetadataProviderError> {
         if let Some(package) = &self.cargo_manifest.package {
             if let Ok(version) = &package.version.get() {
-                Version::from_str(version).map_err(|e| MetadataProviderError::CannotParseVersion(e))
+                Version::from_str(version).map_err(MetadataProviderError::CannotParseVersion)
             } else {
                 Err(MetadataProviderError::CannotProvideVersion)
             }
@@ -193,7 +193,7 @@ impl GenerateRecipe for RustGenerator {
                     .into_iter()
                     .filter(|dep| !existing_reqs.contains(dep)),
             );
-            
+
             has_sccache = true;
         }
 
@@ -236,7 +236,8 @@ impl GenerateRecipe for RustGenerator {
     }
 }
 
-fn get_cargo_manifest(manifest_root: &PathBuf) -> Result<Manifest, CargoTomlError> {
+/// Load the Cargo manifest from the given path.
+fn get_cargo_manifest(manifest_root: &Path) -> Result<Manifest, CargoTomlError> {
     let package_manifest_path = manifest_root.join("Cargo.toml");
 
     Manifest::from_path(&package_manifest_path).and_then(|mut manifest| {
