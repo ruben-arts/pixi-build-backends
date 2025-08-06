@@ -8,6 +8,7 @@ use std::{
 };
 
 use build_script::BuildScriptContext;
+use cargo_toml::{Error as CargoTomlError, Manifest};
 use config::RustBackendConfig;
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
@@ -23,6 +24,8 @@ use recipe_stage0::{
     recipe::{Item, Script},
 };
 use std::collections::BTreeSet;
+use std::str::FromStr;
+use recipe_stage0::recipe::Value;
 
 #[derive(Default, Clone)]
 pub struct RustGenerator {}
@@ -46,6 +49,13 @@ impl GenerateRecipe for RustGenerator {
         let requirements = &mut generated_recipe.recipe.requirements;
 
         let resolved_requirements = requirements.resolve(Some(host_platform));
+
+        // Get the Cargo manifest from the manifest root
+        let cargo_manifest = get_cargo_manifest(&manifest_root)
+            .into_diagnostic()
+            .map_err(|e| miette::miette!("Failed to parse Cargo.toml: {e}"))?;
+
+        // Mix the Cargo manifest with the recipe
 
         // Ensure the compiler function is added to the build requirements
         // only if it is not already present.
@@ -101,12 +111,6 @@ impl GenerateRecipe for RustGenerator {
             // only if they are not already present
             let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
 
-            requirements.build.extend(
-                sccache_dep
-                    .into_iter()
-                    .filter(|dep| !existing_reqs.contains(dep)),
-            );
-
             has_sccache = true;
         }
 
@@ -149,6 +153,83 @@ impl GenerateRecipe for RustGenerator {
     }
 }
 
+fn get_cargo_manifest(manifest_root: &PathBuf) -> Result<Manifest, CargoTomlError> {
+    let package_manifest_path = manifest_root.join("Cargo.toml");
+
+    Manifest::from_path(&package_manifest_path).and_then(|mut manifest| {
+        manifest.complete_from_path(&package_manifest_path)?;
+        Ok(manifest)
+    })
+}
+
+
+fn merge_cargo_manifest_with_recipe(
+    manifest: Manifest,
+    recipe: &mut GeneratedRecipe,
+) {
+    // About section
+    if let Some(package) = manifest.package {
+        // Create about if missing
+        let about = recipe.recipe.about.get_or_insert_with(Default::default);
+        
+        // Only set values if they are not already set
+        if about.description.is_none() {
+            if let Some(desc) = &package.description {
+                if let Ok(desc) = desc.get(){
+                    about.description = Some(Value::from_str(desc.as_str()).unwrap());
+                }
+            }
+        }
+        
+        if about.documentation.is_none() {
+            if let Some(doc) = &package.documentation {
+                if let Ok(doc) = doc.get() {
+                    about.documentation = Some(Value::from_str(doc.as_str()).unwrap());
+                }
+            }
+        }
+        
+        if about.repository.is_none() {
+            if let Some(repo) = &package.repository {
+                if let Ok(repo) = repo.get() {
+                    about.repository = Some(Value::from_str(repo.as_str()).unwrap());
+                }
+            }
+        }
+        if about.license.is_none() {
+            if let Some(license) = &package.license {
+                if let Ok(license) = license.get() {
+                    about.license = Some(Value::from_str(license.as_str()).unwrap());
+                }
+            }
+        }
+        if about.license_file.is_none() {
+            if let Some(license_file) = &package.license_file {
+                if let Ok(license_file) = license_file.get() {
+                    about.license_file = Some(Value::from_str(license_file.to_string_lossy().to_string().as_str()).unwrap());
+                }
+            }
+        }
+        
+        if about.homepage.is_none() {
+            if let Some(homepage) = &package.homepage {
+                if let Ok(homepage) = homepage.get() {
+                    about.homepage = Some(Value::from_str(homepage.as_str()).unwrap());
+                }
+            }
+        }
+        // If summary is not set, use the package description as a fallback.
+        if about.summary.is_none() {
+            if let Some(description) = &package.description {
+                if let Ok(description) = description.get() {
+                    about.summary = Some(Value::from_str(description.as_str()).unwrap());
+                }
+            }
+        }
+        
+    }
+}
+
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
@@ -163,6 +244,7 @@ pub async fn main() {
 
 #[cfg(test)]
 mod tests {
+    use cargo_toml::Package;
     use indexmap::IndexMap;
 
     use super::*;
@@ -358,5 +440,38 @@ mod tests {
         ".source[0].path" => "[ ... path ... ]",
         ".build.script.content" => "[ ... script ... ]",
         });
+    }
+
+    #[test]
+    fn test_manifest_parsing() {
+        let current_dir = std::env::current_dir().unwrap();
+        let package_manifest_path = current_dir.join("Cargo.toml");
+
+        let mut manifest = Manifest::from_path(&package_manifest_path).unwrap();
+
+        manifest.complete_from_path(&package_manifest_path).unwrap();
+        
+        eprintln!("{manifest:#?}");
+        
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "default_target": {
+                    "run_dependencies": {
+                        "dependency": "*"
+                    }
+                },
+            }
+        });
+        
+        let mut generated_recipe = GeneratedRecipe::from_model(project_model.clone());
+        
+        // Merge the Cargo manifest with the recipe
+        merge_cargo_manifest_with_recipe(manifest, &mut generated_recipe);
+        
+        // Verify that the about section is populated correctly
+        eprintln!("{:#?}", generated_recipe.recipe.about);
+        
     }
 }

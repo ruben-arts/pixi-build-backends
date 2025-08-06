@@ -1,6 +1,11 @@
 [package]
 name = "pixi-build-rust"
 version = "0.3.2"
+description = "A Rust build backend for Pixi"
+documentation = "https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rust/"
+repository.workspace = true
+license.workspace = true
+license-file.workspace = true
 edition.workspace = true
 
 [dependencies]
@@ -10,7 +15,7 @@ minijinja = { workspace = true, features = ["json"] }
 rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros"] }
-
+cargo_toml = "0.22.3"
 pixi-build-backend = { workspace = true }
 pixi_build_types = { workspace = true }
 
