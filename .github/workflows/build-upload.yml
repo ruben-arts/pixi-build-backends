@@ -24,7 +24,7 @@ on:
         description: "Custom backend name (overrides selection)"
         type: string
       version:
-        description: "Version number (e.g. 1.2.3)"
+        description: "Version number (without the 'v', e.g. 1.2.3)"
         required: true
         type: string
 
@@ -42,22 +42,28 @@ jobs:
   create-tag:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.set_tag.outputs.tag }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: prefix-dev/setup-pixi@8ca4608ef7f4daeb54f5205b20d0b7cb42f11143 # v0.8.14
+        with:
+          environments: bump
       - name: Determine backend and tag
-        id: set_tag
+        id: set_backend
         run: |
           BACKEND="${{ github.event.inputs.custom_backend_name || github.event.inputs.backend }}"
+          echo "backend=$BACKEND" >> $GITHUB_OUTPUT
           TAG="${BACKEND}-v${{ github.event.inputs.version }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-      - name: Create and push tag
+      - name: Install cargo edit
+        run: |
+          pixi run cargo-set-version --package ${{ steps.set_backend.outputs.backend }} --version "${{ github.event.inputs.version }}"
+      - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.set_tag.outputs.tag }}"
-          git push origin "${{ steps.set_tag.outputs.tag }}"
+          git add .
+          git commit -m "chore: bump version of ${{ steps.set_backend.outputs.backend }} to ${{ github.event.inputs.version }}"
+          git push origin HEAD:${{ github.ref_name }}
 
   generate-matrix:
     if: ${{ github.event_name != 'workflow_dispatch' || success() }}
