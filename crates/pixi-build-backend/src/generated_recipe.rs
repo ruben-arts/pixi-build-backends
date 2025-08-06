@@ -1,16 +1,16 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
-    path::{Path, PathBuf},
-};
+use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
 use miette::Diagnostic;
 use pixi_build_types::ProjectModelV1;
 use rattler_build::{NormalizedKey, recipe::variable::Variable};
 use rattler_conda_types::{Platform, Version};
 use recipe_stage0::recipe::{About, IntermediateRecipe, Package, Value};
 use serde::de::DeserializeOwned;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
-use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
 
 #[derive(Debug, Clone, Default)]
 pub struct PythonParams {
@@ -83,7 +83,7 @@ pub trait BackendConfig: DeserializeOwned + Clone {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum GenerateRecipeError {   
+pub enum GenerateRecipeError {
     #[error("There was no name defined for the recipe")]
     NoNameDefined,
     #[error("There was no version defined for the recipe")]
@@ -101,8 +101,12 @@ impl GeneratedRecipe {
     /// Creates a new [`GeneratedRecipe`] from a [`ProjectModelV1`].
     /// A default implementation that doesn't take into account the
     /// build scripts or other fields.
-    pub fn from_model(model: ProjectModelV1, provider: Option<impl MetadataProvider>) -> Result<Self, GenerateRecipeError> {
-        let version = model.version
+    pub fn from_model(
+        model: ProjectModelV1,
+        provider: Option<impl MetadataProvider>,
+    ) -> Result<Self, GenerateRecipeError> {
+        let version = model
+            .version
             .or_else(|| provider.as_ref().and_then(|p| p.version().ok()))
             .ok_or(GenerateRecipeError::NoVersionDefined)?;
 
@@ -110,7 +114,8 @@ impl GeneratedRecipe {
             if let Ok(name) = provider
                 .as_ref()
                 .map(|p| p.name())
-                .ok_or(GenerateRecipeError::NoNameDefined)?{
+                .ok_or(GenerateRecipeError::NoNameDefined)?
+            {
                 name
             } else {
                 return Err(GenerateRecipeError::NoNameDefined);
@@ -126,11 +131,9 @@ impl GeneratedRecipe {
 
         let requirements =
             from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
-        
-        let about = provider
-            .as_ref()
-            .and_then(|p| p.about());
-        
+
+        let about = provider.as_ref().and_then(|p| p.about());
+
         let ir = IntermediateRecipe {
             package,
             requirements,
@@ -146,7 +149,7 @@ impl GeneratedRecipe {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum MetadataProviderError{
+pub enum MetadataProviderError {
     #[error("The metadata provider cannot provide a name for the recipe")]
     CannotProvideName,
     #[error("The metadata provider cannot provide a version for the recipe")]
@@ -159,10 +162,10 @@ pub trait MetadataProvider {
     /// Returns the name of the metadata provider.
     /// This is used to identify the provider in the recipe.
     fn name(&self) -> Result<String, MetadataProviderError>;
-    
+
     /// Returns the version of the metadata provider.
     fn version(&self) -> Result<Version, MetadataProviderError>;
-    
+
     /// Returns an optional [`About`] section for the recipe.
     fn about(&self) -> Option<About>;
 }

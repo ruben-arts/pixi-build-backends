@@ -124,7 +124,7 @@ impl GenerateRecipe for RustGenerator {
             let cargo_manifest = get_cargo_manifest(&manifest_root)
                 .into_diagnostic()
                 .map_err(|e| miette::miette!("Failed to parse Cargo.toml: {e}"))?;
-            
+
             let provider = CargoMetadataProvider { cargo_manifest };
             generated_recipe =
                 GeneratedRecipe::from_model(model.clone(), Some(provider)).into_diagnostic()?;
@@ -482,29 +482,71 @@ mod tests {
 
         // Verify that the about section is populated correctly
         eprintln!("{:#?}", generated_recipe.recipe);
-        
+
         // Manually load the Cargo manifest to ensure it works
         let current_dir = std::env::current_dir().unwrap();
         let package_manifest_path = current_dir.join("Cargo.toml");
         let mut manifest = Manifest::from_path(&package_manifest_path).unwrap();
         manifest.complete_from_path(&package_manifest_path).unwrap();
-        
-        assert_eq!(manifest.clone().package.unwrap().name.clone(), generated_recipe.recipe.package.name.to_string());
+
+        assert_eq!(
+            manifest.clone().package.unwrap().name.clone(),
+            generated_recipe.recipe.package.name.to_string()
+        );
         assert_eq!(
             *manifest.clone().package.unwrap().version.get().unwrap(),
             generated_recipe.recipe.package.version.to_string()
         );
         assert_eq!(
-            *manifest.clone().package.unwrap().description.unwrap().get().unwrap(),
-            generated_recipe.recipe.about.as_ref().and_then(|a| a.description.clone()).unwrap().to_string()
+            *manifest
+                .clone()
+                .package
+                .unwrap()
+                .description
+                .unwrap()
+                .get()
+                .unwrap(),
+            generated_recipe
+                .recipe
+                .about
+                .as_ref()
+                .and_then(|a| a.description.clone())
+                .unwrap()
+                .to_string()
         );
         assert_eq!(
-            *manifest.clone().package.unwrap().license.unwrap().get().unwrap(),
-            generated_recipe.recipe.about.as_ref().and_then(|a| a.license.clone()).unwrap().to_string()
+            *manifest
+                .clone()
+                .package
+                .unwrap()
+                .license
+                .unwrap()
+                .get()
+                .unwrap(),
+            generated_recipe
+                .recipe
+                .about
+                .as_ref()
+                .and_then(|a| a.license.clone())
+                .unwrap()
+                .to_string()
         );
         assert_eq!(
-            *manifest.clone().package.unwrap().repository.unwrap().get().unwrap(),
-            generated_recipe.recipe.about.as_ref().and_then(|a| a.repository.clone()).unwrap().to_string()
+            *manifest
+                .clone()
+                .package
+                .unwrap()
+                .repository
+                .unwrap()
+                .get()
+                .unwrap(),
+            generated_recipe
+                .recipe
+                .about
+                .as_ref()
+                .and_then(|a| a.repository.clone())
+                .unwrap()
+                .to_string()
         );
     }
 }
