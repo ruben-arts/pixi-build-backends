@@ -104,26 +104,26 @@ impl GeneratedRecipe {
     pub fn from_model(
         model: ProjectModelV1,
         provider: Option<impl MetadataProvider>,
-    ) -> Result<Self, GenerateRecipeError> {
-        let version = model
-            .version
-            .or_else(|| provider.as_ref().and_then(|p| p.version().ok()))
-            .ok_or(GenerateRecipeError::NoVersionDefined)?;
-
+    ) -> Result<Self, GenerateRecipeError> {        
+        // If the name is not defined in the model, we try to get it from the provider.
+        // If the provider cannot provide a name, we return an error.
         let name = if model.name.is_empty() {
-            if let Ok(name) = provider
+            provider
                 .as_ref()
-                .map(|p| p.name())
+                .and_then(|p| p.name().ok())
                 .ok_or(GenerateRecipeError::NoNameDefined)?
-            {
-                name
-            } else {
-                return Err(GenerateRecipeError::NoNameDefined);
-            }
         } else {
             model.name
         };
 
+
+        // If the version is not defined in the model, we try to get it from the provider.
+        // If the provider cannot provide a version, we return an error.
+        let version = model
+            .version
+            .or_else(|| provider.as_ref().and_then(|p| p.version().ok()))
+            .ok_or(GenerateRecipeError::NoVersionDefined)?;
+        
         let package = Package {
             name: Value::Concrete(name),
             version: Value::Concrete(version.to_string()),

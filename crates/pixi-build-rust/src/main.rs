@@ -55,7 +55,7 @@ impl MetadataProvider for CargoMetadataProvider {
     }
 
     fn about(&self) -> Option<About> {
-        // Macro to simplify setting values
+        // Macro to simplify setting str values
         macro_rules! set_str {
             ($target:expr, $source:expr) => {
                 if $target.is_none() {
@@ -68,7 +68,7 @@ impl MetadataProvider for CargoMetadataProvider {
             };
         }
 
-        // About section
+        // Translate the Cargo manifest into an recipe About section
         if let Some(cargo_package) = &self.cargo_manifest.package {
             let mut about = About::default();
             set_str!(about.description, cargo_package.description);
@@ -113,22 +113,17 @@ impl GenerateRecipe for RustGenerator {
         host_platform: Platform,
         _python_params: Option<PythonParams>,
     ) -> miette::Result<GeneratedRecipe> {
-        let mut generated_recipe: GeneratedRecipe;
-
-        if config.ignore_cargo_manifest.is_some_and(|ignore| ignore) {
-            generated_recipe =
-                GeneratedRecipe::from_model(model.clone(), None::<CargoMetadataProvider>)
-                    .into_diagnostic()?;
+        let provider = if config.ignore_cargo_manifest.is_some_and(|ignore| ignore) {
+            None
         } else {
-            // Get the Cargo manifest from the manifest root
-            let cargo_manifest = get_cargo_manifest(&manifest_root)
-                .into_diagnostic()
-                .map_err(|e| miette::miette!("Failed to parse Cargo.toml: {e}"))?;
+            Some(CargoMetadataProvider {
+                cargo_manifest: get_cargo_manifest(&manifest_root)
+                    .into_diagnostic()?,
+            })
+        };
 
-            let provider = CargoMetadataProvider { cargo_manifest };
-            generated_recipe =
-                GeneratedRecipe::from_model(model.clone(), Some(provider)).into_diagnostic()?;
-        }
+        let mut generated_recipe =
+            GeneratedRecipe::from_model(model.clone(), provider).into_diagnostic()?;
 
         // we need to add compilers
         let compiler_function = compiler_requirement(&Language::Rust);
