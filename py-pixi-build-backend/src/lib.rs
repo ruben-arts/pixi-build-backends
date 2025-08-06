@@ -107,8 +107,16 @@ fn pixi_build_backend(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<recipe_stage0::conditional::PyItemString>()?;
     m.add_class::<recipe_stage0::conditional::PyItemPackageDependency>()?;
 
+    m.add_class::<recipe_stage0::conditional_requirements::PyVecItemPackageDependency>()?;
+
     m.add_class::<recipe_stage0::conditional::PyConditionalString>()?;
+    m.add_class::<recipe_stage0::conditional::PyConditionalPackageDependency>()?;
+    m.add_class::<recipe_stage0::conditional::PyConditionalSource>()?;
+
+    // ListOrItem python part
     m.add_class::<recipe_stage0::conditional::PyListOrItemString>()?;
+    m.add_class::<recipe_stage0::conditional::PyListOrItemPackageDependency>()?;
+    m.add_class::<recipe_stage0::conditional::PyListOrItemSource>()?;
 
     // Add entry points
     m.add_function(wrap_pyfunction!(cli::py_main, m)?)?;
