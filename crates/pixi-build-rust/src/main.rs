@@ -19,13 +19,13 @@ use pixi_build_backend::{
 };
 use pixi_build_types::ProjectModelV1;
 use rattler_conda_types::{PackageName, Platform};
+use recipe_stage0::recipe::Value;
 use recipe_stage0::{
     matchspec::PackageDependency,
     recipe::{Item, Script},
 };
 use std::collections::BTreeSet;
 use std::str::FromStr;
-use recipe_stage0::recipe::Value;
 
 #[derive(Default, Clone)]
 pub struct RustGenerator {}
@@ -162,25 +162,21 @@ fn get_cargo_manifest(manifest_root: &PathBuf) -> Result<Manifest, CargoTomlErro
     })
 }
 
-
-fn merge_cargo_manifest_with_recipe(
-    manifest: Manifest,
-    recipe: &mut GeneratedRecipe,
-) {
+fn merge_cargo_manifest_with_recipe(manifest: Manifest, recipe: &mut GeneratedRecipe) {
     // About section
     if let Some(package) = manifest.package {
         // Create about if missing
         let about = recipe.recipe.about.get_or_insert_with(Default::default);
-        
+
         // Only set values if they are not already set
         if about.description.is_none() {
             if let Some(desc) = &package.description {
-                if let Ok(desc) = desc.get(){
+                if let Ok(desc) = desc.get() {
                     about.description = Some(Value::from_str(desc.as_str()).unwrap());
                 }
             }
         }
-        
+
         if about.documentation.is_none() {
             if let Some(doc) = &package.documentation {
                 if let Ok(doc) = doc.get() {
@@ -188,7 +184,7 @@ fn merge_cargo_manifest_with_recipe(
                 }
             }
         }
-        
+
         if about.repository.is_none() {
             if let Some(repo) = &package.repository {
                 if let Ok(repo) = repo.get() {
@@ -206,11 +202,14 @@ fn merge_cargo_manifest_with_recipe(
         if about.license_file.is_none() {
             if let Some(license_file) = &package.license_file {
                 if let Ok(license_file) = license_file.get() {
-                    about.license_file = Some(Value::from_str(license_file.to_string_lossy().to_string().as_str()).unwrap());
+                    about.license_file = Some(
+                        Value::from_str(license_file.to_string_lossy().to_string().as_str())
+                            .unwrap(),
+                    );
                 }
             }
         }
-        
+
         if about.homepage.is_none() {
             if let Some(homepage) = &package.homepage {
                 if let Ok(homepage) = homepage.get() {
@@ -226,7 +225,6 @@ fn merge_cargo_manifest_with_recipe(
                 }
             }
         }
-        
     }
 }
 
@@ -450,9 +448,9 @@ mod tests {
         let mut manifest = Manifest::from_path(&package_manifest_path).unwrap();
 
         manifest.complete_from_path(&package_manifest_path).unwrap();
-        
+
         eprintln!("{manifest:#?}");
-        
+
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -464,14 +462,13 @@ mod tests {
                 },
             }
         });
-        
+
         let mut generated_recipe = GeneratedRecipe::from_model(project_model.clone());
-        
+
         // Merge the Cargo manifest with the recipe
         merge_cargo_manifest_with_recipe(manifest, &mut generated_recipe);
-        
+
         // Verify that the about section is populated correctly
         eprintln!("{:#?}", generated_recipe.recipe.about);
-        
     }
 }

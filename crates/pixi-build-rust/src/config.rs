@@ -56,7 +56,8 @@ impl BackendConfig for RustBackendConfig {
             } else {
                 target_config.extra_input_globs.clone()
             },
-            ignore_cargo_manifest: target_config.ignore_cargo_manifest
+            ignore_cargo_manifest: target_config
+                .ignore_cargo_manifest
                 .or(self.ignore_cargo_manifest),
         })
     }
