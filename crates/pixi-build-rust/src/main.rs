@@ -117,8 +117,7 @@ impl GenerateRecipe for RustGenerator {
             None
         } else {
             Some(CargoMetadataProvider {
-                cargo_manifest: get_cargo_manifest(&manifest_root)
-                    .into_diagnostic()?,
+                cargo_manifest: get_cargo_manifest(&manifest_root).into_diagnostic()?,
             })
         };
 
