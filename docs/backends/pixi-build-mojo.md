@@ -64,10 +64,9 @@ authors = ["J. Doe <jdoe@mail.com>"]
 platforms = ["linux-64"]
 preview = ["pixi-build"]
 channels = [
-    "conda-forge",
+    "https://prefix.dev/conda-forge",
     "https://conda.modular.com/max-nightly",
-    "https://prefix.dev/pixi-build-backends",
-    "https://repo.prefix.dev/modular-community"
+    "https://prefix.dev/modular-community"
 ]
 
 [package]
