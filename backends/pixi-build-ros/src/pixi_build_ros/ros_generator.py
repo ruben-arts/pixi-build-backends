@@ -91,15 +91,14 @@ class ROSGenerator(GenerateRecipeProtocol):
         package_xml_str = get_package_xml_content(manifest_root)
         package_xml = convert_package_xml_to_catkin_package(package_xml_str)
 
-        name = package_xml.name
-        version = package_xml.version
-
-        # TODO: Set this on the recipe
-        package = Package(name, version)
-
 
         # Get requirements from package.xml
         distro = Distro(backend_config.distro)
+
+        name = f"ros-{distro.name}-{package_xml.name.replace('_', '-')}"
+        version = package_xml.version
+        package = Package(name, version)
+
         package_requirements = package_xml_to_conda_requirements(package_xml, distro)
 
         # Add standard dependencies
