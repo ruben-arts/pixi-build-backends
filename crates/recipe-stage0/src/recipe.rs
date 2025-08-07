@@ -78,7 +78,7 @@ impl<T> Item<T> {
 impl<T: Display> Display for Item<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Item::Value(value) => write!(f, "{}", value.to_string()),
+            Item::Value(value) => write!(f, "{}", value),
             Item::Conditional(cond) => write!(f, "{}", cond),
         }
     }
