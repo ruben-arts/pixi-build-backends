@@ -3961,6 +3961,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi-build-basic"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.10.0",
+ "insta",
+ "miette",
+ "minijinja",
+ "pixi-build-backend",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "recipe-stage0",
+ "rstest",
+ "serde",
+ "serde_json",
+ "strum",
+ "tokio",
+]
+
+[[package]]
 name = "pixi-build-cmake"
 version = "0.3.2"
 dependencies = [

@@ -1,0 +1,8 @@
+---
+source: crates/pixi-build-basic/src/main.rs
+expression: result
+snapshot_kind: text
+---
+{
+    "custom/*.c",
+}
