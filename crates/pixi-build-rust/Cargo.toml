@@ -8,19 +8,21 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
+fs-err = { workspace = true }
 indexmap = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true, features = ["json"] }
+once_cell = { workspace = true }
 rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 cargo_toml = "0.22.3"
+pathdiff = { workspace = true }
 pixi-build-backend = { workspace = true }
 pixi_build_types = { workspace = true }
 
 recipe-stage0 = { workspace = true }
-tracing = "0.1.41"
-
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }

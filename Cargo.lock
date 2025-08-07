@@ -4057,10 +4057,13 @@ name = "pixi-build-rust"
 version = "0.3.2"
 dependencies = [
  "cargo_toml",
+ "fs-err",
  "indexmap 2.10.0",
  "insta",
  "miette",
  "minijinja",
+ "once_cell",
+ "pathdiff",
  "pixi-build-backend",
  "pixi_build_types",
  "rattler_conda_types",
@@ -4069,8 +4072,8 @@ dependencies = [
  "serde",
  "serde_json",
  "temp-env",
+ "thiserror 2.0.12",
  "tokio",
- "tracing",
 ]
 
 [[package]]

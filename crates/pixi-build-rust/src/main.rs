@@ -1,17 +1,17 @@
 mod build_script;
 mod config;
+mod metadata;
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use build_script::BuildScriptContext;
-use cargo_toml::{Error as CargoTomlError, Manifest};
 use config::RustBackendConfig;
+use metadata::CargoMetadataProvider;
 use miette::IntoDiagnostic;
-use pixi_build_backend::generated_recipe::{MetadataProvider, MetadataProviderError};
 use pixi_build_backend::{
     cache::{sccache_envs, sccache_tools},
     compilers::{Language, compiler_requirement},
@@ -19,89 +19,15 @@ use pixi_build_backend::{
     intermediate_backend::IntermediateBackendInstantiator,
 };
 use pixi_build_types::ProjectModelV1;
-use rattler_conda_types::{PackageName, Platform, Version};
-use recipe_stage0::recipe::{About, Value};
+use rattler_conda_types::{PackageName, Platform};
 use recipe_stage0::{
     matchspec::PackageDependency,
     recipe::{Item, Script},
 };
-use std::collections::BTreeSet;
-use std::str::FromStr;
 
 #[derive(Default, Clone)]
 pub struct RustGenerator {}
 
-pub struct CargoMetadataProvider {
-    cargo_manifest: Manifest,
-}
-impl MetadataProvider for CargoMetadataProvider {
-    fn name(&self) -> Result<String, MetadataProviderError> {
-        if let Some(package) = &self.cargo_manifest.package {
-            Ok(package.name.clone().to_string())
-        } else {
-            Err(MetadataProviderError::CannotProvideName)
-        }
-    }
-    fn version(&self) -> Result<Version, MetadataProviderError> {
-        if let Some(package) = &self.cargo_manifest.package {
-            if let Ok(version) = &package.version.get() {
-                Version::from_str(version).map_err(MetadataProviderError::CannotParseVersion)
-            } else {
-                Err(MetadataProviderError::CannotProvideVersion)
-            }
-        } else {
-            Err(MetadataProviderError::CannotProvideVersion)
-        }
-    }
-
-    fn about(&self) -> Option<About> {
-        // Macro to simplify setting str values
-        macro_rules! set_str {
-            ($target:expr, $source:expr) => {
-                if $target.is_none() {
-                    if let Some(val) = &$source {
-                        if let Ok(val) = val.get() {
-                            $target = Some(Value::from_str(val.as_str()).unwrap());
-                        }
-                    }
-                }
-            };
-        }
-
-        // Translate the Cargo manifest into an recipe About section
-        if let Some(cargo_package) = &self.cargo_manifest.package {
-            let mut about = About::default();
-            set_str!(about.description, cargo_package.description);
-            set_str!(about.documentation, cargo_package.documentation);
-            set_str!(about.repository, cargo_package.repository);
-            set_str!(about.license, cargo_package.license);
-            set_str!(about.homepage, cargo_package.homepage);
-
-            if about.license_file.is_none() {
-                // If license file is not set, use the first license file from the package
-                if let Some(license_file) = &cargo_package.license_file {
-                    if let Ok(license_file) = license_file.get() {
-                        about.license_file = Some(
-                            Value::from_str(license_file.to_string_lossy().to_string().as_str())
-                                .unwrap(),
-                        );
-                    }
-                }
-            }
-
-            // If summary is not set, use the package description as a fallback.
-            if about.summary.is_none() {
-                if let Some(description) = &cargo_package.description {
-                    if let Ok(description) = description.get() {
-                        about.summary = Some(Value::from_str(description.as_str()).unwrap());
-                    }
-                }
-            }
-            return Some(about);
-        }
-        None
-    }
-}
 impl GenerateRecipe for RustGenerator {
     type Config = RustBackendConfig;
 
@@ -113,19 +39,16 @@ impl GenerateRecipe for RustGenerator {
         host_platform: Platform,
         _python_params: Option<PythonParams>,
     ) -> miette::Result<GeneratedRecipe> {
-        let provider = if config.ignore_cargo_manifest.is_some_and(|ignore| ignore) {
-            None
-        } else {
-            Some(CargoMetadataProvider {
-                cargo_manifest: get_cargo_manifest(&manifest_root).into_diagnostic()?,
-            })
-        };
+        // Construct a CargoMetadataProvider to read the Cargo.toml file
+        // and extract metadata from it.
+        let mut cargo_metadata = CargoMetadataProvider::new(
+            &manifest_root,
+            config.ignore_cargo_manifest.is_some_and(|ignore| ignore),
+        );
 
-        let mut generated_recipe = GeneratedRecipe::from_model(
-            model.clone(),
-            provider.map(|p| Box::new(p) as Box<dyn MetadataProvider>),
-        )
-        .into_diagnostic()?;
+        // Create the recipe
+        let mut generated_recipe =
+            GeneratedRecipe::from_model(model.clone(), &mut cargo_metadata).into_diagnostic()?;
 
         // we need to add compilers
         let compiler_function = compiler_requirement(&Language::Rust);
@@ -168,7 +91,8 @@ impl GenerateRecipe for RustGenerator {
                 // we need to set them as secrets
                 let system_sccache_keys = system_env_vars
                     .keys()
-                    // we set only those keys that are present in the system environment variables and not in the config env
+                    // we set only those keys that are present in the system environment variables
+                    // and not in the config env
                     .filter(|key| {
                         system_sccache_keys.contains(&key.as_str())
                             && !config_env.contains_key(*key)
@@ -212,6 +136,11 @@ impl GenerateRecipe for RustGenerator {
             secrets: sccache_secrets,
         };
 
+        // Add the input globs from the Cargo metadata provider
+        generated_recipe
+            .metadata_input_globs
+            .extend(cargo_metadata.input_globs());
+
         Ok(generated_recipe)
     }
 
@@ -236,16 +165,6 @@ impl GenerateRecipe for RustGenerator {
     }
 }
 
-/// Load the Cargo manifest from the given path.
-fn get_cargo_manifest(manifest_root: &Path) -> Result<Manifest, CargoTomlError> {
-    let package_manifest_path = manifest_root.join("Cargo.toml");
-
-    Manifest::from_path(&package_manifest_path).and_then(|mut manifest| {
-        manifest.complete_from_path(&package_manifest_path)?;
-        Ok(manifest)
-    })
-}
-
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
@@ -260,6 +179,7 @@ pub async fn main() {
 
 #[cfg(test)]
 mod tests {
+    use cargo_toml::Manifest;
     use indexmap::IndexMap;
 
     use super::*;
@@ -550,5 +470,10 @@ mod tests {
                 .unwrap()
                 .to_string()
         );
+
+        insta::assert_yaml_snapshot!(&generated_recipe.metadata_input_globs, @r###"
+        - "../../**/Cargo.toml"
+        - Cargo.toml
+        "###);
     }
 }
