@@ -1,5 +1,4 @@
 use indexmap::IndexMap;
-use rattler_build::build;
 use rattler_conda_types::package::EntryPoint;
 use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Serialize};

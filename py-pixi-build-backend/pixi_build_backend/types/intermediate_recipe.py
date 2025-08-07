@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from pathlib import Path
 from pixi_build_backend.pixi_build_backend import (
     PyIntermediateRecipe,
@@ -18,11 +18,13 @@ from pixi_build_backend.pixi_build_backend import (
     PyPackageSpecDependencies,
     PyItemPackageDependency,
     PyItemString,
+    PyVecItemPackageDependency
 )
 from pixi_build_backend.types.conditional import ConditionalPackageDependency
 from pixi_build_backend.types.item import VecItemPackageDependency
 from pixi_build_backend.types.platform import Platform
 from pixi_build_backend.types.requirements import PackageDependency
+from pixi_build_backend.types.item import ItemPackageDependency
 
 
 ConditionalListPackageDependency = List["ItemPackageDependency"]
@@ -251,7 +253,7 @@ class Script:
     _inner: PyScript
 
     def __init__(self, content: List[str], env: Optional[Dict[str, str]] = None):
-        self._inner = PyScript(content, env)
+        self._inner = PyScript(content, env, None)
 
     @property
     def content(self) -> List[str]:
@@ -626,6 +628,23 @@ class ConditionalRequirements:
     def build(self) -> "VecItemPackageDependency":
         """Get the build requirements."""
         return VecItemPackageDependency._from_inner(self._inner.build)
+    
+    @build.setter
+    def build(self, value: Union[List[ItemPackageDependency], "VecItemPackageDependency"]) -> None:
+        """Set the build requirements."""    
+        if isinstance(value, VecItemPackageDependency):
+            # assert False, f"HERE I FAIL IN ELSE BRANCHING {value} type {type(value)}"
+            self._inner.build = value._inner
+
+        else:
+            # converted = [dep._inner for dep in value]
+            vec = VecItemPackageDependency()
+            vec.extend(value)
+            # assert False, "HERE I FAIL AFTER EXTEND"
+            self._inner.build = vec._inner
+        # else:
+        #     assert False, f"HERE I FAIL IN ELSE BRANCHING {value}"
+        #     self._inner.build = value._inner
 
         # return [ItemPackageDependency._from_inner(build) for build in self._inner.build]
 
@@ -637,32 +656,60 @@ class ConditionalRequirements:
     @property
     def host(self) -> "ConditionalListPackageDependency":
         """Get the host requirements."""
-        return [ItemPackageDependency._from_inner(host) for host in self._inner.host]
+        return VecItemPackageDependency._from_inner(self._inner.host)
 
     @host.setter
-    def host(self, value: "ConditionalListPackageDependency") -> None:
+    def host(self, value: Union[List[ItemPackageDependency], "VecItemPackageDependency"]) -> None:
         """Set the host requirements."""
-        self._inner.host = value
+        if isinstance(value, VecItemPackageDependency):
+            self._inner.host = value._inner
+        else:
+            # converted = [dep._inner for dep in value]
+            # assert False, f"CONVERTED {converted}"
+            vec = VecItemPackageDependency()
+            vec.extend(value)
+            # assert False, "HERE I FAIL AFTER EXTEND"
+            self._inner.host = vec._inner
+        
 
     @property
     def run(self) -> "ConditionalListPackageDependency":
         """Get the run requirements."""
-        return [ItemPackageDependency._from_inner(run) for run in self._inner.run]
+        return VecItemPackageDependency._from_inner(self._inner.run)
 
     @run.setter
-    def run(self, value: "ConditionalListPackageDependency") -> None:
+    def run(self, value: Union[List[ItemPackageDependency], "VecItemPackageDependency"]) -> None:
         """Set the run requirements."""
-        self._inner.run = value
+        if isinstance(value, VecItemPackageDependency):
+            self._inner.run = value._inner
+        else:
+            # converted = [dep._inner for dep in value]
+            # assert False, f"CONVERTED {converted}"
+            vec = VecItemPackageDependency()
+            vec.extend(value)
+            # assert False, "HERE I FAIL AFTER EXTEND"
+            self._inner.run = vec._inner
 
     @property
     def run_constraints(self) -> "ConditionalListPackageDependency":
         """Get the run constraints."""
-        return [ItemPackageDependency._from_inner(run_constraint) for run_constraint in self._inner.run_constraints]
+        return VecItemPackageDependency._from_inner(self._inner.run_constraints)
 
     @run_constraints.setter
-    def run_constraints(self, value: "ConditionalListPackageDependency") -> None:
+    def run_constraints(self, value: Union[List[ItemPackageDependency], "VecItemPackageDependency"]) -> None:
         """Set the run constraints."""
-        self._inner.run_constraints = value
+        if isinstance(value, VecItemPackageDependency):
+            self._inner.run_constraints = value._inner
+        else:
+            # converted = [dep._inner for dep in value]
+            # assert False, f"CONVERTED {converted}"
+            vec = VecItemPackageDependency()
+            vec.extend(value)
+            # assert False, "HERE I FAIL AFTER EXTEND"
+            self._inner.run_constraints = vec._inner
+        # else:
+        #     # assert False, "HERE I FAIL IN ELSE BRANCHING"
+        #     self._inner.run_constraints = value._inner
 
     def resolve(self, host_platform: Optional[Platform] = None) -> "PackageSpecDependencies":
         """Resolve the requirements."""

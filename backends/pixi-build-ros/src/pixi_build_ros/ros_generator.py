@@ -9,8 +9,9 @@ from pixi_build_backend.types.generated_recipe import (
     GenerateRecipeProtocol,
     GeneratedRecipe,
 )
-from pixi_build_backend.types.intermediate_recipe import Script, ConditionalRequirements, \
-    ItemPackageDependency, Package
+from pixi_build_backend.types.intermediate_recipe import Script, ConditionalRequirements, Package
+
+from pixi_build_backend.types.item import ItemPackageDependency
 from pixi_build_backend.types.platform import Platform
 from pixi_build_backend.types.project_model import ProjectModelV1
 from pixi_build_backend.types.python_params import PythonParams
@@ -52,11 +53,25 @@ def merge_requirements(model_requirements: ConditionalRequirements, package_requ
     ) -> List[ItemPackageDependency]:
         """Merge unique items from source into target."""
         result = model
+        # assert False, f"PACKAGE IS {package} type {type(package)} MODEL IS {model} type {type(model)}"
+
+        # assert False, f"package type {type(package[0])}"
         for item in package:
-            if item.concrete.package_name not in [i.concrete.package_name for i in model]:
+            # assert False, f"PN {pn} type {type(pn)}"
+
+            package_names = [i.concrete.package_name for i in model if i.concrete]
+
+            # assert False, f"package names {package_names} type {type(package_names)}"
+            # pn = item.concrete.package_name
+
+            # assert False, f"BEFORE IF item {item} type {type(item)}"
+            if item.concrete is not None and item.concrete.package_name not in package_names:
+                # assert False, "BEFORE APPEND"
                 result.append(item)
-            if item.template.package_name not in [i.template.package_name for i in model]:
+                # assert False, "BEFORE APPEND"
+            if str(item.template) not in [str(i.template) for i in model]:
                 result.append(item)
+        # assert False, f"RESULT IS {result} type {type(result)}"
         return result
 
     merged.host = merge_unique_items(model_requirements.host, package_requirements.host)
@@ -109,22 +124,30 @@ class ROSGenerator(GenerateRecipeProtocol):
             build_deps.extend(["tapi"])
 
         build = package_requirements.build
+        # assert False, "HERE I FAIL before I set build requirements"
         for dep in build_deps:
             build.append(ItemPackageDependency(name=dep))
 
         # Add compiler dependencies
         build.append(ItemPackageDependency("${{ compiler('c') }}"))
         build.append(ItemPackageDependency("${{ compiler('cxx') }}"))
+        # assert False, "HERE I FAIL before setting build requirements"
+        
         package_requirements.build = build
+
+        # assert False, "HERE I FAIL before host deps"
 
         host_deps = ["python", "numpy", "pip", "pkg-config"]
 
+        # assert False, "HERE I FAIL before getting host property"
         host = package_requirements.host
         for dep in host_deps:
             host.append(ItemPackageDependency(name=dep))
+        # assert False, "HERE I FAIL before setting hst requirements"
         package_requirements.host = host
 
         # Create base recipe from model
+        # assert False, "HERE I FAIL before frommodel"
         generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
 
         # Get recipe components
@@ -133,6 +156,7 @@ class ROSGenerator(GenerateRecipeProtocol):
         # recipe.package.version = version
 
         # Merge package requirements into the model requirements
+        # assert "HERE I FAIL before merge requiremets"
         requirements = merge_requirements(recipe.requirements, package_requirements)
         recipe.requirements = requirements
         generated_recipe.recipe = recipe

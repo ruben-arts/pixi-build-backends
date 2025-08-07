@@ -69,7 +69,7 @@ impl PyVecItemPackageDependency {
     pub fn extend(&mut self, items: &Bound<'_, PyList>) {
         let items: Vec<PyItemPackageDependency> = items
             .iter()
-            .map(|item| item.extract::<PyItemPackageDependency>().unwrap().into())
+            .map(|item| item.extract::<PyItemPackageDependency>().unwrap())
             .collect();
 
         let rust_items = items

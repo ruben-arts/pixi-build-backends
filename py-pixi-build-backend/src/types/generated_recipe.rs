@@ -95,8 +95,9 @@ impl PyGeneratedRecipe {
 // }
 
 impl PyGeneratedRecipe {
-    pub fn into_generated_recipe(&self, py: Python) -> GeneratedRecipe {
-        let recipe: IntermediateRecipe = self.recipe.borrow(py).into_intermediate_recipe(py);
+    pub fn into_generated_recipe(self, py: Python) -> GeneratedRecipe {
+        let recipe: IntermediateRecipe =
+            self.recipe.borrow(py).clone().into_intermediate_recipe(py);
         let metadata_input_globs: BTreeSet<String> =
             (*self.metadata_input_globs.borrow(py).clone())
                 .clone()

@@ -7,7 +7,8 @@ from typing import Any, List
 import yaml
 from catkin_pkg.package import Package as CatkinPackage, parse_package_string
 
-from pixi_build_backend.types.intermediate_recipe import ConditionalRequirements, ItemPackageDependency
+from pixi_build_backend.types.intermediate_recipe import ConditionalRequirements
+from pixi_build_backend.types.item import ItemPackageDependency
 from pixi_build_ros.distro import Distro
 
 
@@ -144,6 +145,7 @@ def package_xml_to_conda_requirements(
     cond = ConditionalRequirements()
     # TODO: should we add all build dependencies to the host requirements?
     cond.host = build_requirements
+    # assert False, "HERE I FAIL before CONDA.BUILD"
     cond.build = build_requirements
     cond.run = run_requirements
 

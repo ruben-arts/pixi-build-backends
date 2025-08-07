@@ -1,10 +1,9 @@
 use ::serde::{Deserialize, Serialize};
 use pyo3::exceptions::PyTypeError;
-use pyo3::types::{PyAnyMethods, PyList, PyListMethods, PyString};
+use pyo3::types::{PyAnyMethods, PyList, PyListMethods};
 use pyo3::{Bound, FromPyObject, Py, PyAny, PyErr, PyResult, Python, intern, pyclass, pymethods};
 use recipe_stage0::matchspec::PackageDependency;
 use recipe_stage0::recipe::{Conditional, Item, ListOrItem, Source, Value};
-use std::boxed::Box;
 use std::fmt::Display;
 
 use std::ops::Deref;

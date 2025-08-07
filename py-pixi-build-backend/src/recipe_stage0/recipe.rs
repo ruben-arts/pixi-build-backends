@@ -2,7 +2,7 @@ use crate::{
     create_py_wrap,
     error::PyPixiBuildBackendError,
     recipe_stage0::{
-        conditional::{PyItemPackageDependency, PyItemSource, PyItemString},
+        conditional::{PyItemSource, PyItemString},
         conditional_requirements::PyVecItemPackageDependency,
         requirements::PyPackageSpecDependencies,
     },
@@ -10,30 +10,20 @@ use crate::{
 };
 use ::serde::{Deserialize, Serialize};
 use indexmap::IndexMap;
-use pyo3::prelude::*;
 use pyo3::{
-    Bound, Py, PyAny, PyResult, Python,
+    Py, PyResult, Python,
     exceptions::PyValueError,
     pyclass, pymethods,
     types::{PyList, PyListMethods},
 };
 use rattler_conda_types::package::EntryPoint;
-use recipe_stage0::{
-    matchspec::PackageDependency,
-    recipe::{
-        About, Build, ConditionalRequirements, Extra, IntermediateRecipe, Item, NoArchKind,
-        Package, PathSource, Python as RecipePython, Script, Source, Test, UrlSource, Value,
-    },
+use recipe_stage0::recipe::{
+    About, Build, ConditionalRequirements, Extra, IntermediateRecipe, Item, NoArchKind, Package,
+    PathSource, Python as RecipePython, Script, Source, Test, UrlSource, Value,
 };
 
 use std::fmt::{Display, Formatter};
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    ops::Deref,
-    rc::Rc,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::{collections::HashMap, ops::Deref};
 
 create_py_wrap!(PyHashMapValueString, HashMap<String, PyValueString>, |map: &HashMap<String, PyValueString>, f: &mut Formatter<'_>| {
     write!(f, "{{")?;
@@ -107,14 +97,14 @@ impl Display for PyIntermediateRecipe {
         write!(
             f,
             "{{ context: {}, package: {}, source: {}, build: {}, requirements: {}, tests: {}, about: {}, extra: {} }}",
-            self.context.to_string(),
-            self.package.to_string(),
-            self.source.to_string(),
-            self.build.to_string(),
-            self.requirements.to_string(),
-            self.tests.to_string(),
-            self.about.to_string(),
-            self.extra.to_string()
+            self.context,
+            self.package,
+            self.source,
+            self.build,
+            self.requirements,
+            self.tests,
+            self.about,
+            self.extra
         )
     }
 }
@@ -200,11 +190,11 @@ impl PyIntermediateRecipe {
         }
     }
 
-    pub fn into_intermediate_recipe(&self, py: Python) -> IntermediateRecipe {
+    pub fn into_intermediate_recipe(self, py: Python) -> IntermediateRecipe {
         let context: HashMap<String, PyValueString> = (*self.context.borrow(py).clone()).clone();
         let context = context
             .into_iter()
-            .map(|(k, v)| (k, (*v).clone().into()))
+            .map(|(k, v)| (k, (*v).clone()))
             .collect();
 
         let py_package = self.package.borrow(py).clone();
@@ -213,7 +203,7 @@ impl PyIntermediateRecipe {
         let source: Vec<Item<Source>> = (*self.source.borrow(py).clone())
             .clone()
             .into_iter()
-            .map(|item| (*item).clone().into())
+            .map(|item| (*item).clone())
             .collect();
 
         let build: Build = self.build.borrow(py).clone().into_build(py);
@@ -226,15 +216,15 @@ impl PyIntermediateRecipe {
         let tests: Vec<Test> = (*self.tests.borrow(py).clone())
             .clone()
             .into_iter()
-            .map(|test| (*test).clone().into())
+            .map(|test| (*test).clone())
             .collect();
 
         let about: Option<About> = (*self.about.borrow(py).clone())
             .clone()
-            .map(|about| (*about).clone().into());
+            .map(|about| (*about).clone());
         let extra: Option<Extra> = (*self.extra.borrow(py).clone())
             .clone()
-            .map(|extra| (*extra).clone().into());
+            .map(|extra| (*extra).clone());
 
         IntermediateRecipe {
             context,
@@ -484,10 +474,10 @@ impl PyBuild {
     }
 
     pub fn from_build(py: Python, build: Build) -> PyBuild {
-        let py_value = build.number.map(|n| PyValueU64::from(n));
+        let py_value = build.number.map(PyValueU64::from);
         let py_value: PyOptionValueU64 = py_value.into();
 
-        let py_noarch = build.noarch.map(|n| PyNoArchKind::from(n));
+        let py_noarch = build.noarch.map(PyNoArchKind::from);
 
         let py_noarch_value: PyOptionPyNoArchKind = py_noarch.into();
 
@@ -508,7 +498,7 @@ impl PyBuild {
             number: Py::new(py, PyOptionValueU64::default()).unwrap(),
             script: Py::new(py, PyScript::new(py, None, None, None)).unwrap(),
             noarch: Py::new(py, PyOptionPyNoArchKind::default()).unwrap(),
-            python: Py::new(py, PyPython::new(py, None).unwrap()).unwrap(),
+            python: Py::new(py, PyPython::new(None).unwrap()).unwrap(),
         }
     }
 }
@@ -518,10 +508,7 @@ impl Display for PyBuild {
         write!(
             f,
             "{{ number: {:?}, script: {}, noarch: {:?}, python: {} }}",
-            self.number.to_string(),
-            self.script.to_string(),
-            self.noarch.to_string(),
-            self.python.to_string()
+            self.number, self.script, self.noarch, self.python
         )
     }
 }
@@ -551,9 +538,7 @@ impl Display for PyScript {
         write!(
             f,
             "{{ content: {}, env: {}, secrets: {} }}",
-            self.content.to_string(),
-            self.env.to_string(),
-            self.secrets.to_string()
+            self.content, self.env, self.secrets
         )
     }
 }
@@ -563,14 +548,18 @@ impl PyScript {
     #[new]
     pub fn new(
         py: Python,
-        content: Option<Py<PyVecString>>,
-        env: Option<Py<PyHashMap>>,
-        secrets: Option<Py<PyVecString>>,
+        content: Option<Vec<String>>,
+        env: Option<HashMap<String, String>>,
+        secrets: Option<Vec<String>>,
     ) -> Self {
+        let py_vec = PyVecString::from(content.unwrap_or_default());
+        let env = env.map(PyHashMap::from).unwrap_or_default();
+        let secrets = secrets.map(PyVecString::from).unwrap_or_default();
+
         PyScript {
-            content: content.unwrap_or_else(|| Py::new(py, PyVecString::default()).unwrap()),
-            env: env.unwrap_or_else(|| Py::new(py, PyHashMap::default()).unwrap()),
-            secrets: secrets.unwrap_or_else(|| Py::new(py, PyVecString::default()).unwrap()),
+            content: Py::new(py, py_vec).unwrap(),
+            env: Py::new(py, env).unwrap(),
+            secrets: Py::new(py, secrets).unwrap(),
         }
     }
 
@@ -642,7 +631,7 @@ pub struct PyPython {
 #[pymethods]
 impl PyPython {
     #[new]
-    pub fn new(py: Python, entry_points: Option<Vec<String>>) -> PyResult<Self> {
+    pub fn new(entry_points: Option<Vec<String>>) -> PyResult<Self> {
         let entry_points: Result<Vec<EntryPoint>, _> = entry_points
             .unwrap_or_default()
             .into_iter()

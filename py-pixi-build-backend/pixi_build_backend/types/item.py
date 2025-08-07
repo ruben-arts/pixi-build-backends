@@ -43,7 +43,7 @@ class VecItemPackageDependency(List):
 
     def __iter__(self):
         """Return iterator."""
-        for item in self._inner:
+        for item in self._inner.__iter__():
             yield ItemPackageDependency._from_inner(item)
 
     def __contains__(self, item: "ItemPackageDependency") -> bool:
@@ -147,10 +147,13 @@ class ItemPackageDependency:
         return str(self._inner)
     
     @property
-    def concrete(self) -> "PackageDependency":
+    def concrete(self) -> Optional["PackageDependency"]:
         """Get the concrete package dependency."""
-        return PackageDependency._from_inner(self._inner.concrete())
-    
+        concrete = self._inner.concrete()
+        if concrete is None:
+            return None
+        return PackageDependency._from_inner(concrete)
+
     @property
     def template(self) -> Optional[str]:
         """Get the template string if this is a template."""
