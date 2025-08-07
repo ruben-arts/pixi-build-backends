@@ -521,7 +521,7 @@ create_py_wrap!(PyHashMap, HashMap<String, String>, |map: &HashMap<String, Strin
     write!(f, "}}")
 });
 
-#[pyclass(set_all, get_all, str)]
+#[pyclass(get_all, set_all, str)]
 #[derive(Clone, Serialize, Deserialize)]
 // #[serde(default)]
 pub struct PyScript {
@@ -563,35 +563,6 @@ impl PyScript {
         }
     }
 
-    // #[getter]
-    // pub fn content(&self) -> Vec<String> {
-    //     self.inner.content.clone()
-    // }
-
-    // #[getter]
-    // pub fn env(&self) -> HashMap<String, String> {
-    //     self.inner.env.clone().into_iter().collect()
-    // }
-
-    // #[getter]
-    // pub fn secrets(&self) -> Vec<String> {
-    //     self.inner.secrets.clone()
-    // }
-
-    // #[setter]
-    // pub fn set_content(&mut self, content: Vec<String>) {
-    //     self.inner.content = content;
-    // }
-
-    // #[setter]
-    // pub fn set_env(&mut self, env: HashMap<String, String>) {
-    //     self.inner.env = env.into_iter().collect();
-    // }
-
-    // #[setter]
-    // pub fn set_secrets(&mut self, secrets: Vec<String>) {
-    //     self.inner.secrets = secrets;
-    // }
 }
 
 impl PyScript {

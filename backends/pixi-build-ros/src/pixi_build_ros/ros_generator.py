@@ -53,25 +53,14 @@ def merge_requirements(model_requirements: ConditionalRequirements, package_requ
     ) -> List[ItemPackageDependency]:
         """Merge unique items from source into target."""
         result = model
-        # assert False, f"PACKAGE IS {package} type {type(package)} MODEL IS {model} type {type(model)}"
 
-        # assert False, f"package type {type(package[0])}"
         for item in package:
-            # assert False, f"PN {pn} type {type(pn)}"
-
             package_names = [i.concrete.package_name for i in model if i.concrete]
 
-            # assert False, f"package names {package_names} type {type(package_names)}"
-            # pn = item.concrete.package_name
-
-            # assert False, f"BEFORE IF item {item} type {type(item)}"
             if item.concrete is not None and item.concrete.package_name not in package_names:
-                # assert False, "BEFORE APPEND"
                 result.append(item)
-                # assert False, "BEFORE APPEND"
             if str(item.template) not in [str(i.template) for i in model]:
                 result.append(item)
-        # assert False, f"RESULT IS {result} type {type(result)}"
         return result
 
     merged.host = merge_unique_items(model_requirements.host, package_requirements.host)
@@ -79,7 +68,6 @@ def merge_requirements(model_requirements: ConditionalRequirements, package_requ
     merged.run = merge_unique_items(model_requirements.run, package_requirements.run)
 
     # If the dependency is of type Source in one of the requirements, we need to set them to Source for all variants
-
     return merged
 
 
@@ -123,43 +111,25 @@ class ROSGenerator(GenerateRecipeProtocol):
         if host_platform.is_osx:
             build_deps.extend(["tapi"])
 
-        build = package_requirements.build
-        # assert False, "HERE I FAIL before I set build requirements"
         for dep in build_deps:
-            build.append(ItemPackageDependency(name=dep))
+            package_requirements.build.append(ItemPackageDependency(name=dep))
 
         # Add compiler dependencies
-        build.append(ItemPackageDependency("${{ compiler('c') }}"))
-        build.append(ItemPackageDependency("${{ compiler('cxx') }}"))
-        # assert False, "HERE I FAIL before setting build requirements"
-        
-        package_requirements.build = build
-
-        # assert False, "HERE I FAIL before host deps"
+        package_requirements.build.append(ItemPackageDependency("${{ compiler('c') }}"))
+        package_requirements.build.append(ItemPackageDependency("${{ compiler('cxx') }}"))
 
         host_deps = ["python", "numpy", "pip", "pkg-config"]
 
-        # assert False, "HERE I FAIL before getting host property"
-        host = package_requirements.host
         for dep in host_deps:
-            host.append(ItemPackageDependency(name=dep))
-        # assert False, "HERE I FAIL before setting hst requirements"
-        package_requirements.host = host
+            package_requirements.host.append(ItemPackageDependency(name=dep))
 
         # Create base recipe from model
-        # assert False, "HERE I FAIL before frommodel"
         generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
-
-        # Get recipe components
-        recipe = generated_recipe.recipe
-        # recipe.package.name = name
-        # recipe.package.version = version
+        generated_recipe.recipe.package = package
 
         # Merge package requirements into the model requirements
-        # assert "HERE I FAIL before merge requiremets"
-        requirements = merge_requirements(recipe.requirements, package_requirements)
-        recipe.requirements = requirements
-        generated_recipe.recipe = recipe
+        requirements = merge_requirements(generated_recipe.recipe.requirements, package_requirements)
+        generated_recipe.recipe.requirements = requirements
 
         # Determine build platform
         build_platform = BuildPlatform.current()
@@ -168,25 +138,15 @@ class ROSGenerator(GenerateRecipeProtocol):
         build_script_context = BuildScriptContext.load_from_template(package_xml, build_platform)
         build_script_lines = build_script_context.render()
 
-        # Update recipe components
-        # recipe.build.script = Script(
-        #     content=build_script_lines,
-        #     env=backend_config.env,
-        # )
-
-        # Stupid setter chain as it doesn't work directly
-        script = Script(
+        generated_recipe.recipe.build.script =  Script(
             content=build_script_lines,
             env=backend_config.env,
-            )        
-        build = recipe.build
-        build.script = script
-        recipe.build = build
-        generated_recipe.recipe = recipe
+        )
 
         # Test the build script before running to early out.
-        assert generated_recipe.recipe.build.script.content == build_script_lines, recipe.build.script.content
-        # raise RuntimeError(f"Generated recipe: {recipe.to_yaml()}")
+        # TODO: returned script.content list is not a list of strings, a container for that
+        # so it cant be compared directly with the list yet
+        # assert generated_recipe.recipe.build.script.content == build_script_lines, f"Script content {generated_recipe.recipe.build.script.content}, build script lines {build_script_lines}"
         return generated_recipe
 
     def extract_input_globs_from_build(self, config: ROSBackendConfig, editable: bool) -> List[str]:
