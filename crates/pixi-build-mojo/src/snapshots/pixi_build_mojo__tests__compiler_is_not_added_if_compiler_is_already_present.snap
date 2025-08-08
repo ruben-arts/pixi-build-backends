@@ -9,16 +9,7 @@ package:
 source: []
 build:
   number: ~
-  script:
-    content:
-      - mojo --version
-      - "\t"
-      - "\t\tmojo build -i . ./main.mojo -o $PREFIX/bin/example"
-      - "\t"
-      - ""
-      - "\tmojo package -i . mylib -o $PREFIX/lib/mojo/lib.mojopkg"
-    env: {}
-    secrets: []
+  script: "[ ... script ... ]"
 requirements:
   build:
     - mojo-compiler

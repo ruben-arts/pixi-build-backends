@@ -135,6 +135,12 @@ impl PyIntermediateRecipe {
 
         Ok(py_intermediate_recipe)
     }
+
+    /// Converts the PyIntermediateRecipe to a YAML string.
+    pub fn to_yaml(&self, py: Python) -> PyResult<String> {
+        let recipe = self.to_intermediate_recipe(py);
+        Ok(serde_yaml::to_string(&recipe).map_err(PyPixiBuildBackendError::YamlSerialization)?)
+    }
 }
 
 impl PyIntermediateRecipe {
@@ -190,7 +196,7 @@ impl PyIntermediateRecipe {
         }
     }
 
-    pub fn into_intermediate_recipe(self, py: Python) -> IntermediateRecipe {
+    pub fn to_intermediate_recipe(&self, py: Python) -> IntermediateRecipe {
         let context: HashMap<String, PyValueString> = (*self.context.borrow(py).clone()).clone();
         let context = context
             .into_iter()
@@ -238,13 +244,6 @@ impl PyIntermediateRecipe {
         }
     }
 }
-
-// impl From<PyIntermediateRecipe> for IntermediateRecipe {
-//     fn from(py_recipe: PyIntermediateRecipe) -> Self {
-//         // py_recipe.inner
-//         IntermediateRecipe::default()
-//     }
-// }
 
 #[pyclass(str)]
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -442,12 +441,9 @@ create_py_wrap!(
 #[pyclass(get_all, set_all, str)]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PyBuild {
-    // pub(crate) inner: Build,
     pub number: Py<PyOptionValueU64>,
     pub script: Py<PyScript>,
-    // #[serde(skip_serializing_if = "Option::is_none")]
     pub noarch: Py<PyOptionPyNoArchKind>,
-    // #[serde(skip_serializing_if = "RecipePython::is_default")]
     pub python: Py<PyPython>,
 }
 
@@ -523,13 +519,9 @@ create_py_wrap!(PyHashMap, HashMap<String, String>, |map: &HashMap<String, Strin
 
 #[pyclass(get_all, set_all, str)]
 #[derive(Clone, Serialize, Deserialize)]
-// #[serde(default)]
 pub struct PyScript {
-    // pub(crate) inner: Script,
     pub content: Py<PyVecString>,
-    // #[serde(default)]
     pub env: Py<PyHashMap>,
-    // #[serde(default)]
     pub secrets: Py<PyVecString>,
 }
 
@@ -562,7 +554,6 @@ impl PyScript {
             secrets: Py::new(py, secrets).unwrap(),
         }
     }
-
 }
 
 impl PyScript {

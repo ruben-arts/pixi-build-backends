@@ -3,7 +3,7 @@ channels = ["https://prefix.dev/conda-forge"]
 preview = ["pixi-build"]
 
 [package]
-name = "pixi-build-cmake"
+name = "pixi-build-python"
 version = "0.3.2"
 
 [package.build]

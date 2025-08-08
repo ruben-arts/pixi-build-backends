@@ -1,5 +1,6 @@
 ---
-source: crates/pixi-build-mojo/src/main.rs
+source: crates/pixi-build-rust/src/main.rs
+assertion_line: 239
 expression: generated_recipe.recipe
 ---
 context: {}
@@ -14,7 +15,8 @@ build:
   script: "[ ... script ... ]"
 requirements:
   build:
-    - max
+    - "${{ compiler('rust') }}"
+    - sccache
   host: []
   run:
     - boltons

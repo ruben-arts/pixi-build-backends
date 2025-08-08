@@ -16,15 +16,11 @@ from pixi_build_backend.pixi_build_backend import (
     PyUrlSource,
     PyPathSource,
     PyPackageSpecDependencies,
-    PyItemPackageDependency,
     PyItemString,
     PyVecItemPackageDependency
 )
-from pixi_build_backend.types.conditional import ConditionalPackageDependency
-from pixi_build_backend.types.item import VecItemPackageDependency
+from pixi_build_backend.types.item import VecItemPackageDependency, ItemPackageDependency
 from pixi_build_backend.types.platform import Platform
-from pixi_build_backend.types.requirements import PackageDependency
-from pixi_build_backend.types.item import ItemPackageDependency
 
 
 ConditionalListPackageDependency = List["ItemPackageDependency"]
@@ -43,18 +39,17 @@ class IntermediateRecipe:
     def package(self) -> "Package":
         """Get the package information."""
         return Package._from_inner(self._inner.package)
-    
+
     @package.setter
     def package(self, value: "Package") -> None:
         """Set the package information."""
         self._inner.package = value._inner
 
-
     @property
     def build(self) -> "Build":
         """Get the build configuration."""
         return Build._from_inner(self._inner.build)
-    
+
     @build.setter
     def build(self, value: "Build") -> None:
         """Set the build configuration."""
@@ -64,7 +59,7 @@ class IntermediateRecipe:
     def requirements(self) -> "ConditionalRequirements":
         """Get the requirements configuration."""
         return ConditionalRequirements._from_inner(self._inner.requirements)
-    
+
     @requirements.setter
     def requirements(self, value: "ConditionalRequirements") -> None:
         """Set the requirements configuration."""
@@ -139,7 +134,7 @@ class IntermediateRecipe:
         ```
         """
         return self._inner.to_yaml()
-    
+
     def __str__(self) -> str:
         """
         Get the string representation of the IntermediateRecipe.
@@ -165,7 +160,7 @@ class Package:
     def name(self) -> "ValueString":
         """Get the package name."""
         return ValueString._from_inner(self._inner.name)
-    
+
     @name.setter
     def name(self, value: str) -> None:
         """Set the package name."""
@@ -317,7 +312,7 @@ class Python:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
-    
+
     def __str__(self) -> str:
         """
         Get the string representation of the Python configuration.
@@ -420,7 +415,6 @@ class ValueString:
 
     _inner: PyValueString
 
-
     def __init__(self, value: str):
         self._inner = PyValueString(value)
 
@@ -510,7 +504,7 @@ class ValueString:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
-    
+
     def __str__(self) -> str:
         """
         Get the string representation of the ValueString.
@@ -646,13 +640,6 @@ class ConditionalRequirements:
         #     assert False, f"HERE I FAIL IN ELSE BRANCHING {value}"
         #     self._inner.build = value._inner
 
-        # return [ItemPackageDependency._from_inner(build) for build in self._inner.build]
-
-    # @build.setter
-    # def build(self, value: "ConditionalListPackageDependency") -> None:
-    #     """Set the build requirements."""
-    #     self._inner.build = value
-
     @property
     def host(self) -> "ConditionalListPackageDependency":
         """Get the host requirements."""
@@ -722,7 +709,7 @@ class ConditionalRequirements:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
-    
+
     def __str__(self) -> str:
         """
         Get the string representation of the ConditionalRequirements.
@@ -823,9 +810,6 @@ class PackageSpecDependencies:
     def build(self) -> Dict[str, str]:
         """Get the build dependencies."""
         return self._inner.build
-
-
-
 
 
 class ItemString:
