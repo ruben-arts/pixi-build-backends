@@ -533,9 +533,7 @@ impl Display for PyScript {
         write!(
             f,
             "{{ content: {}, env: {}, secrets: {} }}",
-            self.content,
-            self.env,
-            self.secrets
+            self.content, self.env, self.secrets
         )
     }
 }

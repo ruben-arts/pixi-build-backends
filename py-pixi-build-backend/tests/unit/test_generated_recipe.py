@@ -4,6 +4,8 @@ from pixi_build_backend.types.conditional import ConditionalPackageDependency, L
 from pixi_build_backend.types.generated_recipe import GeneratedRecipe
 from pixi_build_backend.types.item import ItemPackageDependency
 from pixi_build_backend.types.project_model import ProjectModelV1
+from pixi_build_backend.types.intermediate_recipe import IntermediateRecipe
+
 
 
 def test_generated_recipe_from_model(snapshot: Any) -> None:
@@ -13,7 +15,6 @@ def test_generated_recipe_from_model(snapshot: Any) -> None:
     generated_recipe = GeneratedRecipe.from_model(model)
 
     # Verify that the recipe is of the correct type
-    from pixi_build_backend.types.intermediate_recipe import IntermediateRecipe
     assert isinstance(generated_recipe.recipe, IntermediateRecipe)
 
     assert snapshot == generated_recipe.recipe.to_yaml()
