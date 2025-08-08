@@ -1,5 +1,5 @@
 from typing import Any
-from pathlib import Path
+
 from pixi_build_backend.types.conditional import ConditionalPackageDependency, ListOrItemPackageDependency
 from pixi_build_backend.types.generated_recipe import GeneratedRecipe
 from pixi_build_backend.types.item import ItemPackageDependency
