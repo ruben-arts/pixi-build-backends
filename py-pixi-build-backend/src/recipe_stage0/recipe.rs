@@ -2,7 +2,7 @@ use crate::{
     create_py_wrap,
     error::PyPixiBuildBackendError,
     recipe_stage0::{
-        conditional::{PyItemPackageDependency, PyItemSource, PyItemString},
+        conditional::{PyItemSource, PyItemString},
         conditional_requirements::PyVecItemPackageDependency,
         requirements::PyPackageSpecDependencies,
     },
@@ -10,30 +10,20 @@ use crate::{
 };
 use ::serde::{Deserialize, Serialize};
 use indexmap::IndexMap;
-use pyo3::prelude::*;
 use pyo3::{
-    Bound, Py, PyAny, PyRef, PyRefMut, PyResult, Python,
+    Py, PyResult, Python,
     exceptions::PyValueError,
-    pyclass, pymethods, serde,
+    pyclass, pymethods,
     types::{PyList, PyListMethods},
 };
 use rattler_conda_types::package::EntryPoint;
-use recipe_stage0::{
-    matchspec::PackageDependency,
-    recipe::{
-        About, Build, ConditionalRequirements, Extra, IntermediateRecipe, Item, NoArchKind,
-        Package, PathSource, Python as RecipePython, Script, Source, Test, UrlSource, Value,
-    },
+use recipe_stage0::recipe::{
+    About, Build, ConditionalRequirements, Extra, IntermediateRecipe, Item, NoArchKind, Package,
+    PathSource, Python as RecipePython, Script, Source, Test, UrlSource, Value,
 };
 
 use std::fmt::{Display, Formatter};
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    ops::Deref,
-    rc::Rc,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::{collections::HashMap, ops::Deref};
 
 create_py_wrap!(PyHashMapValueString, HashMap<String, PyValueString>, |map: &HashMap<String, PyValueString>, f: &mut Formatter<'_>| {
     write!(f, "{{")?;
@@ -107,14 +97,14 @@ impl Display for PyIntermediateRecipe {
         write!(
             f,
             "{{ context: {}, package: {}, source: {}, build: {}, requirements: {}, tests: {}, about: {}, extra: {} }}",
-            self.context.to_string(),
-            self.package.to_string(),
-            self.source.to_string(),
-            self.build.to_string(),
-            self.requirements.to_string(),
-            self.tests.to_string(),
-            self.about.to_string(),
-            self.extra.to_string()
+            self.context,
+            self.package,
+            self.source,
+            self.build,
+            self.requirements,
+            self.tests,
+            self.about,
+            self.extra
         )
     }
 }
@@ -144,6 +134,12 @@ impl PyIntermediateRecipe {
             PyIntermediateRecipe::from_intermediate_recipe(intermediate_recipe, py);
 
         Ok(py_intermediate_recipe)
+    }
+
+    /// Converts the PyIntermediateRecipe to a YAML string.
+    pub fn to_yaml(&self, py: Python) -> PyResult<String> {
+        let recipe = self.to_intermediate_recipe(py);
+        Ok(serde_yaml::to_string(&recipe).map_err(PyPixiBuildBackendError::YamlSerialization)?)
     }
 }
 
@@ -200,11 +196,11 @@ impl PyIntermediateRecipe {
         }
     }
 
-    pub fn into_intermediate_recipe(&self, py: Python) -> IntermediateRecipe {
+    pub fn to_intermediate_recipe(&self, py: Python) -> IntermediateRecipe {
         let context: HashMap<String, PyValueString> = (*self.context.borrow(py).clone()).clone();
         let context = context
             .into_iter()
-            .map(|(k, v)| (k, (*v).clone().into()))
+            .map(|(k, v)| (k, (*v).clone()))
             .collect();
 
         let py_package = self.package.borrow(py).clone();
@@ -213,7 +209,7 @@ impl PyIntermediateRecipe {
         let source: Vec<Item<Source>> = (*self.source.borrow(py).clone())
             .clone()
             .into_iter()
-            .map(|item| (*item).clone().into())
+            .map(|item| (*item).clone())
             .collect();
 
         let build: Build = self.build.borrow(py).clone().into_build(py);
@@ -226,15 +222,15 @@ impl PyIntermediateRecipe {
         let tests: Vec<Test> = (*self.tests.borrow(py).clone())
             .clone()
             .into_iter()
-            .map(|test| (*test).clone().into())
+            .map(|test| (*test).clone())
             .collect();
 
         let about: Option<About> = (*self.about.borrow(py).clone())
             .clone()
-            .map(|about| (*about).clone().into());
+            .map(|about| (*about).clone());
         let extra: Option<Extra> = (*self.extra.borrow(py).clone())
             .clone()
-            .map(|extra| (*extra).clone().into());
+            .map(|extra| (*extra).clone());
 
         IntermediateRecipe {
             context,
@@ -248,13 +244,6 @@ impl PyIntermediateRecipe {
         }
     }
 }
-
-// impl From<PyIntermediateRecipe> for IntermediateRecipe {
-//     fn from(py_recipe: PyIntermediateRecipe) -> Self {
-//         // py_recipe.inner
-//         IntermediateRecipe::default()
-//     }
-// }
 
 #[pyclass(str)]
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -452,12 +441,9 @@ create_py_wrap!(
 #[pyclass(get_all, set_all, str)]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PyBuild {
-    // pub(crate) inner: Build,
     pub number: Py<PyOptionValueU64>,
     pub script: Py<PyScript>,
-    // #[serde(skip_serializing_if = "Option::is_none")]
     pub noarch: Py<PyOptionPyNoArchKind>,
-    // #[serde(skip_serializing_if = "RecipePython::is_default")]
     pub python: Py<PyPython>,
 }
 
@@ -484,10 +470,10 @@ impl PyBuild {
     }
 
     pub fn from_build(py: Python, build: Build) -> PyBuild {
-        let py_value = build.number.map(|n| PyValueU64::from(n));
+        let py_value = build.number.map(PyValueU64::from);
         let py_value: PyOptionValueU64 = py_value.into();
 
-        let py_noarch = build.noarch.map(|n| PyNoArchKind::from(n));
+        let py_noarch = build.noarch.map(PyNoArchKind::from);
 
         let py_noarch_value: PyOptionPyNoArchKind = py_noarch.into();
 
@@ -519,9 +505,9 @@ impl Display for PyBuild {
             f,
             "{{ number: {:?}, script: {}, noarch: {:?}, python: {} }}",
             self.number.to_string(),
-            self.script.to_string(),
+            self.script,
             self.noarch.to_string(),
-            self.python.to_string()
+            self.python
         )
     }
 }
@@ -536,13 +522,9 @@ create_py_wrap!(PyHashMap, HashMap<String, String>, |map: &HashMap<String, Strin
 
 #[pyclass(set_all, get_all, str)]
 #[derive(Clone, Serialize, Deserialize)]
-// #[serde(default)]
 pub struct PyScript {
-    // pub(crate) inner: Script,
     pub content: Py<PyVecString>,
-    // #[serde(default)]
     pub env: Py<PyHashMap>,
-    // #[serde(default)]
     pub secrets: Py<PyVecString>,
 }
 
@@ -551,9 +533,9 @@ impl Display for PyScript {
         write!(
             f,
             "{{ content: {}, env: {}, secrets: {} }}",
-            self.content.to_string(),
-            self.env.to_string(),
-            self.secrets.to_string()
+            self.content,
+            self.env,
+            self.secrets
         )
     }
 }
@@ -573,36 +555,6 @@ impl PyScript {
             secrets: secrets.unwrap_or_else(|| Py::new(py, PyVecString::default()).unwrap()),
         }
     }
-
-    // #[getter]
-    // pub fn content(&self) -> Vec<String> {
-    //     self.inner.content.clone()
-    // }
-
-    // #[getter]
-    // pub fn env(&self) -> HashMap<String, String> {
-    //     self.inner.env.clone().into_iter().collect()
-    // }
-
-    // #[getter]
-    // pub fn secrets(&self) -> Vec<String> {
-    //     self.inner.secrets.clone()
-    // }
-
-    // #[setter]
-    // pub fn set_content(&mut self, content: Vec<String>) {
-    //     self.inner.content = content;
-    // }
-
-    // #[setter]
-    // pub fn set_env(&mut self, env: HashMap<String, String>) {
-    //     self.inner.env = env.into_iter().collect();
-    // }
-
-    // #[setter]
-    // pub fn set_secrets(&mut self, secrets: Vec<String>) {
-    //     self.inner.secrets = secrets;
-    // }
 }
 
 impl PyScript {
@@ -642,7 +594,7 @@ pub struct PyPython {
 #[pymethods]
 impl PyPython {
     #[new]
-    pub fn new(py: Python, entry_points: Option<Vec<String>>) -> PyResult<Self> {
+    pub fn new(_py: Python, entry_points: Option<Vec<String>>) -> PyResult<Self> {
         let entry_points: Result<Vec<EntryPoint>, _> = entry_points
             .unwrap_or_default()
             .into_iter()

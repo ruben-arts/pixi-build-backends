@@ -1,10 +1,9 @@
 use ::serde::{Deserialize, Serialize};
 use pyo3::exceptions::PyTypeError;
-use pyo3::types::{PyAnyMethods, PyList, PyListMethods, PyString};
+use pyo3::types::{PyAnyMethods, PyList, PyListMethods};
 use pyo3::{Bound, FromPyObject, Py, PyAny, PyErr, PyResult, Python, intern, pyclass, pymethods};
 use recipe_stage0::matchspec::PackageDependency;
 use recipe_stage0::recipe::{Conditional, Item, ListOrItem, Source, Value};
-use std::boxed::Box;
 use std::fmt::Display;
 
 use std::ops::Deref;
@@ -129,17 +128,6 @@ create_py_wrap!(PyVecString, Vec<String>, |v: &Vec<String>,
 >| {
     write!(f, "[{}]", v.join(", "))
 });
-
-// macro_rules! impl_sort_for_orderable {
-//     ($name: ident, $type: ident) => {
-//         #[pymethods]
-//         impl $name {
-//             pub fn sort(&mut self) {
-//                 self.inner.0.sort();
-//             }
-//         }
-//     };
-// }
 
 macro_rules! create_pylist_or_item {
     ($name: ident, $type: ident, $py_type: ident) => {
@@ -343,8 +331,6 @@ create_pylist_or_item!(
 );
 create_pylist_or_item!(PyListOrItemSource, Source, PySource);
 
-// impl_sort_for_orderable!(PyListOrItemString, String);
-
 create_py_wrap!(PyWrapString, String);
 
 macro_rules! create_conditional_interface {
@@ -353,12 +339,9 @@ macro_rules! create_conditional_interface {
             #[pyclass(str, get_all, set_all)]
             #[derive(Clone, Deserialize, Serialize)]
             pub struct $name {
-                // pub(crate) inner: Conditional<$type>,
                 #[serde(rename = "if")]
                 pub condition: String,
                 pub then: Py<[<PyListOrItem $type>]>,
-                // #[serde(skip)]
-                // pub then: Py<PyList>,
                 #[serde(rename = "else")]
                 pub else_value: Py<[<PyListOrItem $type>]>,
             }
@@ -384,34 +367,10 @@ macro_rules! create_conditional_interface {
                     self.condition.clone()
                 }
 
-                // #[getter]
-                // pub fn then_value(&self) -> [<PyListOrItem $type>] {
-                //     [<PyListOrItem $type>] {
-                //         inner: self.inner.then.clone(),
-                //     }
-                // }
-
                 #[getter]
                 pub fn then_value(&self) -> Py<[<PyListOrItem $type>]> {
-                    // let py_list = PyList::empty(py);
-                    // for item in &self.inner.then.0 {
-                    //     let py_item: $py_type = item.clone().into();
-                    //     let py_item = Py::new(py, py_item).unwrap();
-                    //     py_list.append(py_item).unwrap();
-                    // }
-                    // py_list.into()
-
-                    // py_list.into()
-
                     self.then.clone()
                 }
-
-                // #[getter]
-                // pub fn else_value(&self) -> [<PyListOrItem $type>] {
-                //     [<PyListOrItem $type>] {
-                //         inner: self.inner.else_value.clone(),
-                //     }
-                // }
 
                 pub fn __eq__(&self, py: Python, other: &Self) -> bool {
 
@@ -461,36 +420,7 @@ macro_rules! create_conditional_interface {
                         else_value: else_value_list_or_item,
                     }
                 }
-
-                // pub fn into_conditional(
-                //     py: Python,
-                //     conditional: $name,
-                // ) -> Self {
-
-
-
-
-                //     let py_list_or_item: [<PyListOrItem $type>] = conditional.then.clone().into();
-                //     let py_list_or_item_else: [<PyListOrItem $type>] = conditional.else_value.clone().into();
-
-                //     let then_value = Py::new(py, py_list_or_item).unwrap();
-                //     let else_value = Py::new(py, py_list_or_item_else).unwrap();
-
-                //     Self {
-                //         condition: conditional.condition,
-                //         then: then_value,
-                //         else_value,
-                //     }
-                // }
             }
-
-
-
-            // impl From<Conditional<$type>> for $name {
-            //     fn from(inner: Conditional<$type>) -> Self {
-            //         $name { inner: }
-            //     }
-            // }
 
             impl Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -528,20 +458,6 @@ impl<'a> TryFrom<Bound<'a, PyAny>> for PyItemPackageDependency {
         PyItemPackageDependency::extract_bound(&inner)
     }
 }
-
-// impl From<PyConditionalString> for Conditional<String> {
-//     fn from(py_conditional: PyConditionalString) -> Self {
-//         py_conditional.inner
-//     }
-// }
-
-// impl From<ListOrItem<String>> for PyListOrItemString {
-//     fn from(list_or_item: ListOrItem<String>) -> Self {
-//         PyListOrItemString {
-//             inner: list_or_item,
-//         }
-//     }
-// }
 
 impl From<PyListOrItemString> for ListOrItem<String> {
     fn from(py_list_or_item: PyListOrItemString) -> Self {

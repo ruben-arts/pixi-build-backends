@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, path::PathBuf};
+use std::collections::BTreeSet;
 
 use miette::IntoDiagnostic;
 use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe};
@@ -61,8 +61,8 @@ impl PyGeneratedRecipe {
 }
 
 impl PyGeneratedRecipe {
-    pub fn into_generated_recipe(&self, py: Python) -> GeneratedRecipe {
-        let recipe: IntermediateRecipe = self.recipe.borrow(py).into_intermediate_recipe(py);
+    pub fn to_generated_recipe(&self, py: Python) -> GeneratedRecipe {
+        let recipe: IntermediateRecipe = self.recipe.borrow(py).to_intermediate_recipe(py);
         let metadata_input_globs: BTreeSet<String> =
             (*self.metadata_input_globs.borrow(py).clone())
                 .clone()
@@ -110,7 +110,7 @@ impl GenerateRecipe for PyGenerateRecipe {
         let recipe: GeneratedRecipe = Python::with_gil(|py| {
             let manifest_str = manifest_path.to_string_lossy().to_string();
 
-            // we dont pass the wrapper but the python inner model directly
+            // we don't pass the wrapper but the python inner model directly
             let py_object = config.model.clone();
 
             // For other types, we try to wrap them into the Python class
@@ -171,7 +171,7 @@ impl GenerateRecipe for PyGenerateRecipe {
                 .extract::<PyGeneratedRecipe>()
                 .into_diagnostic()?;
 
-            Ok::<_, miette::Report>(generated_recipe.into_generated_recipe(py))
+            Ok::<_, miette::Report>(generated_recipe.to_generated_recipe(py))
         })?;
 
         Ok(recipe)

@@ -40,7 +40,6 @@ class PackageDependency:
     def __init__(self, spec: str) -> None:
         self._inner = PyPackageDependency(spec)
 
-
     @property
     def is_binary(self) -> bool:
         """Check if this is a binary dependency."""
