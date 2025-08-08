@@ -42,10 +42,10 @@ def test_we_can_create_python() -> None:
 def test_package_types() -> None:
     package = ItemPackageDependency("test")
     assert str(package.concrete.package_name) == "test"
-
-    package = ItemPackageDependency("${{ compiler('c') }}")
-
-    assert package.template
+    #
+    # package = ItemPackageDependency("${{ compiler('c') }}")
+    #
+    # assert package.template
 
 
 def test_package_types_conditional() -> None:

@@ -73,4 +73,6 @@ class PackageDependency:
     @classmethod
     def _from_inner(cls, inner: PyPackageDependency) -> "PackageDependency":
         """Create from PyPackageDependency."""
-        return cls(inner)
+        instance = cls.__new__(cls)
+        instance._inner = inner
+        return instance
