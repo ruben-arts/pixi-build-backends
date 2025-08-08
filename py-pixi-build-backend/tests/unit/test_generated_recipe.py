@@ -50,3 +50,21 @@ def test_conditional_item() -> None:
 
     # this is a known issue with the current implementation
     assert item.conditional.condition == "os == 'linux'"
+
+
+def test_generated_recipe_setting_version() -> None:
+    """Test initialization of ProjectModelV1."""
+    model = ProjectModelV1(name="test_project", version="1.0.0")
+
+    generated_recipe = GeneratedRecipe.from_model(model, Path("."))
+
+
+    if "0.0.0" in str(generated_recipe.recipe.package.version):
+        print(str(generated_recipe.recipe.package.version))
+
+    concrete = generated_recipe.recipe.package.version.get_concrete()
+
+    assert concrete is not None
+
+    print(f"Concrete version: {concrete}")
+

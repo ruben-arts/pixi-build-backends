@@ -62,10 +62,10 @@ impl GenerateRecipe for PythonGenerator {
         let requirements = &mut generated_recipe.recipe.requirements;
 
         let resolved_requirements = ConditionalRequirements::resolve(
-            &requirements.build,
-            &requirements.host,
-            &requirements.run,
-            &requirements.run_constraints,
+            requirements.build.as_ref(),
+            requirements.host.as_ref(),
+            requirements.run.as_ref(),
+            requirements.run_constraints.as_ref(),
             Some(host_platform),
         );
 
