@@ -27,9 +27,14 @@ class ROSBackendConfig:
     """ROS backend configuration."""
 
     noarch: Optional[bool] = None
+    # Environment variables to set during the build
     env: Optional[Dict[str, str]] = None
+    # Directory for debug files of this script
     debug_dir: Optional[Path] = None
+    # Extra input globs to include in the build hash
     extra_input_globs: Optional[List[str]] = None
+    # ROS distribution to use, e.g., "foxy", "galactic", "humble"
+    # TODO: This should be figured out in some other way, not from the config.
     distro: Optional[str] = None
 
     def is_noarch(self) -> bool:
@@ -39,37 +44,6 @@ class ROSBackendConfig:
     def get_debug_dir(self) -> Optional[Path]:
         """Get debug directory if set."""
         return self.debug_dir
-
-
-def merge_requirements(model_requirements: ConditionalRequirements, package_requirements: ConditionalRequirements) -> ConditionalRequirements:
-    """Merge two sets of requirements."""
-    merged = ConditionalRequirements()
-
-    # The model requirements are the base, coming from the pixi manifest
-    # We need to only add the names for non existing dependencies
-    def merge_unique_items(
-        model: List[ItemPackageDependency],
-        package: List[ItemPackageDependency],
-    ) -> List[ItemPackageDependency]:
-        """Merge unique items from source into target."""
-        result = model
-
-        for item in package:
-            package_names = [i.concrete.package_name for i in model if i.concrete]
-
-            if item.concrete is not None and item.concrete.package_name not in package_names:
-                result.append(item)
-            if str(item.template) not in [str(i.template) for i in model]:
-                result.append(item)
-        return result
-
-    merged.host = merge_unique_items(model_requirements.host, package_requirements.host)
-    merged.build = merge_unique_items(model_requirements.build, package_requirements.build)
-    merged.run = merge_unique_items(model_requirements.run, package_requirements.run)
-
-    # If the dependency is of type Source in one of the requirements, we need to set them to Source for all variants
-    return merged
-
 
 class ROSGenerator(GenerateRecipeProtocol):
     """ROS recipe generator using Python bindings."""
@@ -87,18 +61,26 @@ class ROSGenerator(GenerateRecipeProtocol):
 
         manifest_root = Path(manifest_path)
 
+        # Create base recipe from model
+        generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
+
         # Read package.xml
         package_xml_str = get_package_xml_content(manifest_root)
         package_xml = convert_package_xml_to_catkin_package(package_xml_str)
 
-
-        # Get requirements from package.xml
+        # Setup ROS distro
         distro = Distro(backend_config.distro)
 
-        name = f"ros-{distro.name}-{package_xml.name.replace('_', '-')}"
-        version = package_xml.version
-        package = Package(name, version)
+        package = generated_recipe.recipe.package
 
+        # Modify the name and version of the package based on the ROS distro and package.xml
+        if "undefined" in str(generated_recipe.recipe.package.name):
+            package.name = f"ros-{distro.name}-{package_xml.name.replace('_', '-')}"
+
+        if "0.0.0" in generated_recipe.recipe.package.version:
+            package.version = package_xml.version
+
+        # Get requirements from package.xml
         package_requirements = package_xml_to_conda_requirements(package_xml, distro)
 
         # Add standard dependencies
@@ -121,10 +103,6 @@ class ROSGenerator(GenerateRecipeProtocol):
 
         for dep in host_deps:
             package_requirements.host.append(ItemPackageDependency(name=dep))
-
-        # Create base recipe from model
-        generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
-        generated_recipe.recipe.package = package
 
         # Merge package requirements into the model requirements
         requirements = merge_requirements(generated_recipe.recipe.requirements, package_requirements)
@@ -152,5 +130,35 @@ class ROSGenerator(GenerateRecipeProtocol):
         """Extract input globs for the build."""
         return get_build_input_globs(config, editable)
 
+
+
+def merge_requirements(model_requirements: ConditionalRequirements, package_requirements: ConditionalRequirements) -> ConditionalRequirements:
+    """Merge two sets of requirements."""
+    merged = ConditionalRequirements()
+
+    # The model requirements are the base, coming from the pixi manifest
+    # We need to only add the names for non-existing dependencies
+    def merge_unique_items(
+            model: List[ItemPackageDependency],
+            package: List[ItemPackageDependency],
+    ) -> List[ItemPackageDependency]:
+        """Merge unique items from source into target."""
+        result = model
+
+        for item in package:
+            package_names = [i.concrete.package_name for i in model if i.concrete]
+
+            if item.concrete is not None and item.concrete.package_name not in package_names:
+                result.append(item)
+            if str(item.template) not in [str(i.template) for i in model]:
+                result.append(item)
+        return result
+
+    merged.host = merge_unique_items(model_requirements.host, package_requirements.host)
+    merged.build = merge_unique_items(model_requirements.build, package_requirements.build)
+    merged.run = merge_unique_items(model_requirements.run, package_requirements.run)
+
+    # If the dependency is of type Source in one of the requirements, we need to set them to Source for all variants
+    return merged
 
 
