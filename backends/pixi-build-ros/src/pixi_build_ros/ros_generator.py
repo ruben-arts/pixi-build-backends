@@ -62,7 +62,7 @@ class ROSGenerator(GenerateRecipeProtocol):
         manifest_root = Path(manifest_path)
 
         # Create base recipe from model
-        generated_recipe = GeneratedRecipe.from_model(model, manifest_root)
+        generated_recipe = GeneratedRecipe.from_model(model)
 
         # Read package.xml
         package_xml_str = get_package_xml_content(manifest_root)
