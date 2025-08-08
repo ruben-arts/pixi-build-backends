@@ -133,7 +133,7 @@ class IntermediateRecipe:
         ```
         """
         return self._inner.to_yaml()
-    
+
     def __str__(self) -> str:
         """
         Get the string representation of the IntermediateRecipe.

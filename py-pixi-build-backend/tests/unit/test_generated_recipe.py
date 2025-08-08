@@ -14,6 +14,7 @@ def test_generated_recipe_from_model(snapshot: Any) -> None:
 
     # Verify that the recipe is of the correct type
     from pixi_build_backend.types.intermediate_recipe import IntermediateRecipe
+
     assert isinstance(generated_recipe.recipe, IntermediateRecipe)
 
     assert snapshot == generated_recipe.recipe.to_yaml()
@@ -73,7 +74,7 @@ def test_generated_recipe_setting_version() -> None:
     # Test getting concrete version
     concrete = generated_recipe.recipe.package.version.get_concrete()
     assert concrete is not None
-    
+
     # Verify concrete version is a valid string
     assert isinstance(concrete, str)
     assert len(concrete) > 0
