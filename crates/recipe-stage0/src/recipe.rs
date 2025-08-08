@@ -1,5 +1,4 @@
 use indexmap::IndexMap;
-use rattler_build::build;
 use rattler_conda_types::package::EntryPoint;
 use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Serialize};
@@ -79,7 +78,7 @@ impl<T> Item<T> {
 impl<T: Display> Display for Item<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Item::Value(value) => write!(f, "{}", value.to_string()),
+            Item::Value(value) => write!(f, "{}", value),
             Item::Conditional(cond) => write!(f, "{}", cond),
         }
     }
