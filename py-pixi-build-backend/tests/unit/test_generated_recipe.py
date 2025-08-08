@@ -1,5 +1,5 @@
 from typing import Any
-from pathlib import Path
+
 from pixi_build_backend.types.conditional import ConditionalPackageDependency, ListOrItemPackageDependency
 from pixi_build_backend.types.generated_recipe import GeneratedRecipe
 from pixi_build_backend.types.item import ItemPackageDependency
@@ -53,7 +53,7 @@ def test_conditional_item() -> None:
     item = ItemPackageDependency.new_from_conditional(conditional)
 
     if item.conditional is not None:
-        item.conditional.condition = "jora"
+        item.conditional.condition = "foo-bar"
 
     # this is a known issue with the current implementation
     if item.conditional is not None:
@@ -74,7 +74,7 @@ def test_generated_recipe_setting_version() -> None:
     # Test getting concrete version
     concrete = generated_recipe.recipe.package.version.get_concrete()
     assert concrete is not None
-    
+
     # Verify concrete version is a valid string
     assert isinstance(concrete, str)
     assert len(concrete) > 0

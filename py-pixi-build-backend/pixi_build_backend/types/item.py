@@ -105,9 +105,7 @@ class VecItemPackageDependency(MutableSequence["ItemPackageDependency"]):
         """Remove all items."""
         self._inner.clear()
 
-    def index(
-        self, item: ItemPackageDependency, start: SupportsIndex = 0, stop: Optional[SupportsIndex] = None
-    ) -> int:
+    def index(self, item: ItemPackageDependency, start: SupportsIndex = 0, stop: Optional[SupportsIndex] = None) -> int:
         """Return index of first occurrence of item."""
         inner_item = item._inner
         if stop is None:

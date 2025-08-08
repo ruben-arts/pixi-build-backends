@@ -41,8 +41,8 @@ jobs:
       - name: Format and Lint
         run: |
           cd py-pixi-build-backend
-          pixi run -e test lint
           pixi run -e test fmt-check
+          pixi run -e test lint
       - name: Run tests
         run: |
           cd py-pixi-build-backend
