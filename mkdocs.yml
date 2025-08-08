@@ -106,6 +106,7 @@ nav:
       - pixi-build-python: backends/pixi-build-python.md
       - pixi-build-rattler-build: backends/pixi-build-rattler-build.md
       - pixi-build-rust: backends/pixi-build-rust.md
+      - pixi-build-mojo: backends/pixi-build-mojo.md
 
 validation:
   omitted_files: warn

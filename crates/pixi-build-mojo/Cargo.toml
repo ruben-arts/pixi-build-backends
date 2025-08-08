@@ -1,0 +1,24 @@
+[package]
+name = "pixi-build-mojo"
+version = "0.1.2"
+edition.workspace = true
+
+[dependencies]
+indexmap = { workspace = true }
+miette = { workspace = true }
+minijinja = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler-build = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+
+pixi-build-backend = { workspace = true }
+pixi_build_types = { workspace = true }
+
+recipe-stage0 = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
+rstest = { workspace = true }

@@ -41,8 +41,8 @@ impl PyGeneratedRecipe {
     }
 
     #[staticmethod]
-    pub fn from_model(py: Python, model: PyProjectModelV1, manifest_root: PathBuf) -> Self {
-        let recipe = GeneratedRecipe::from_model(model.inner.clone(), manifest_root);
+    pub fn from_model(py: Python, model: PyProjectModelV1) -> Self {
+        let recipe = GeneratedRecipe::from_model(model.inner.clone());
         let py_generated_recipe = PyIntermediateRecipe::from_intermediate_recipe(recipe.recipe, py);
 
         let metadata_input_globs_vec: Vec<String> =
