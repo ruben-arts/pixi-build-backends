@@ -10,7 +10,7 @@ on:
       - Cargo.*
 
       # When something in the bindings themselves changes
-      - py-pixi-build-backend/**/*
+      - py-pixi-build-backend/**
 
       # Or when this workflow changes
       - .github/workflows/python-bindings.yml
