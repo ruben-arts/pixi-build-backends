@@ -6,18 +6,6 @@ use pyo3::{prelude::*, types::PyList};
 use recipe_stage0::{matchspec::PackageDependency, recipe::Item};
 use serde::{Deserialize, Serialize};
 
-// create_py_wrap!(
-//     PyVecItemPackageDependency,
-//     Vec<PyItemPackageDependency>,
-//     |vec: &Vec<PyItemPackageDependency>, f: &mut Formatter<'_>| {
-//         write!(f, "[")?;
-//         for item in vec {
-//             write!(f, "{}, ", item)?;
-//         }
-//         write!(f, "]")
-//     }
-// );
-
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[pyclass(str)]
 pub(crate) struct PyVecItemPackageDependency {

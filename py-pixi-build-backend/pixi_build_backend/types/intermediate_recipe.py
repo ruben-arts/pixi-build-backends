@@ -627,13 +627,6 @@ class ConditionalRequirements:
         """Get the build requirements."""
         return VecItemPackageDependency._from_inner(self._inner.build)
 
-        # return [ItemPackageDependency._from_inner(build) for build in self._inner.build]
-
-    # @build.setter
-    # def build(self, value: "ConditionalListPackageDependency") -> None:
-    #     """Set the build requirements."""
-    #     self._inner.build = value
-
     @property
     def host(self) -> "ConditionalListPackageDependency":
         """Get the host requirements."""

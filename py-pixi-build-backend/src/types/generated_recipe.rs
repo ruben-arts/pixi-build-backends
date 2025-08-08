@@ -58,41 +58,7 @@ impl PyGeneratedRecipe {
             build_input_globs: Py::new(py, build_input_globs_vec).unwrap(),
         }
     }
-
-    // #[getter]
-    // pub fn recipe(&self, py: Python) -> Py<PyIntermediateRecipe> {
-    //     // self.inner.recipe.clone().into()
-    //     // PyIntermediateRecipe::from_intermediate_recipe(self.inner.recipe.clone(), py)
-    //     self.recipe
-    // }
-
-    // #[setter]
-    // pub fn set_recipe(&mut self, value: PyIntermediateRecipe) {
-    //     self.inner.recipe = value.inner;
-    // }
-
-    // #[getter]
-    // pub fn metadata_input_globs(&self) -> Vec<String> {
-    //     self.inner.metadata_input_globs.iter().cloned().collect()
-    // }
-
-    // #[getter]
-    // pub fn build_input_globs(&self) -> Vec<String> {
-    //     self.inner.build_input_globs.iter().cloned().collect()
-    // }
 }
-
-// impl From<GeneratedRecipe> for PyGeneratedRecipe {
-//     fn from(recipe: GeneratedRecipe) -> Self {
-//         PyGeneratedRecipe { inner: recipe }
-//     }
-// }
-
-// impl From<PyGeneratedRecipe> for GeneratedRecipe {
-//     fn from(py_recipe: PyGeneratedRecipe) -> Self {
-//         py_recipe.recipe.clone().into()
-//     }
-// }
 
 impl PyGeneratedRecipe {
     pub fn into_generated_recipe(&self, py: Python) -> GeneratedRecipe {

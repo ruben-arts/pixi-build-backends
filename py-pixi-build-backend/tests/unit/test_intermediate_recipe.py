@@ -18,10 +18,7 @@ def test_nested_setters() -> None:
     yaml_content = yaml_file.read_text()
 
     recipe = IntermediateRecipe.from_yaml(yaml_content)
-
-
     recipe.package.name = "new_package_name"
-
 
     assert str(recipe.package.name) == "new_package_name"
 
@@ -32,14 +29,13 @@ def test_intermediate_str(snapshot) -> None:
 
     recipe = IntermediateRecipe.from_yaml(yaml_content)
 
-
     assert str(recipe) == snapshot
 
 
 def test_we_can_create_python() -> None:
     py = Python(["entry-point=module:function"])
 
-    print(py)
+    assert py.entry_points == ["entry-point = module:function"]
 
 
 def test_package_types() -> None:
@@ -47,8 +43,6 @@ def test_package_types() -> None:
     assert package.concrete.package_name() == "test"
 
     package = ItemPackageDependency("${{ compiler('c') }}")
-    
-    # assert str(package) == "${{ compiler('c') }}"
 
     assert package.template
     
@@ -58,7 +52,5 @@ def test_package_types() -> None:
     assert package.concrete.package_name() == "test"
 
     package = ItemPackageDependency("${{ compiler('c') }}")
-    
-    # assert str(package) == "${{ compiler('c') }}"
 
     assert package.template
