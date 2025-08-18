@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, collections::BTreeSet, path::Path, sync::Arc};
 use build_script::{BuildPlatform, BuildScriptContext};
 use config::CMakeBackendConfig;
 use miette::IntoDiagnostic;
+use pixi_build_backend::generated_recipe::DefaultMetadataProvider;
 use pixi_build_backend::{
     compilers::{Language, compiler_requirement, default_compiler},
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
@@ -13,7 +14,7 @@ use pixi_build_backend::{
 };
 use rattler_build::{NormalizedKey, recipe::variable::Variable};
 use rattler_conda_types::{PackageName, Platform};
-use recipe_stage0::recipe::Script;
+use recipe_stage0::recipe::{ConditionalRequirements, Script};
 
 #[derive(Default, Clone)]
 pub struct CMakeGenerator {}
@@ -29,13 +30,21 @@ impl GenerateRecipe for CMakeGenerator {
         host_platform: rattler_conda_types::Platform,
         _python_params: Option<PythonParams>,
     ) -> miette::Result<GeneratedRecipe> {
-        let mut generated_recipe = GeneratedRecipe::from_model(model.clone());
+        let mut generated_recipe =
+            GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
+                .into_diagnostic()?;
 
         // we need to add compilers
 
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        let resolved_requirements = requirements.resolve(Some(host_platform));
+        let resolved_requirements = ConditionalRequirements::resolve(
+            requirements.build.as_ref(),
+            requirements.host.as_ref(),
+            requirements.run.as_ref(),
+            requirements.run_constraints.as_ref(),
+            Some(host_platform),
+        );
 
         // Ensure the compiler function is added to the build requirements
         // only if a specific compiler is not already present.

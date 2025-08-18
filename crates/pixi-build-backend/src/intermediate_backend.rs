@@ -1134,7 +1134,6 @@ where
             params.build_prefix.as_ref().map(|p| p.prefix.as_path()),
             params.work_directory.clone(),
             self.cache_dir.as_deref(),
-            self.source_dir.clone(),
             params.output_directory.as_deref(),
             recipe_path,
         );
@@ -1217,7 +1216,9 @@ where
         };
 
         let (output, output_path) =
-            run_build(output, &tool_config, WorkingDirectoryBehavior::Preserve).await?;
+            // WorkingDirectoryBehavior::Preserve is blocked by
+            // https://github.com/prefix-dev/rattler-build/issues/1825
+            run_build(output, &tool_config, WorkingDirectoryBehavior::Cleanup).await?;
 
         // Extract the input globs from the build and recipe
         let mut input_globs = T::extract_input_globs_from_build(
@@ -1278,12 +1279,14 @@ pub fn conda_build_v1_directories(
     build_prefix: Option<&Path>,
     work_directory: PathBuf,
     cache_dir: Option<&Path>,
-    source_dir: PathBuf,
     output_dir: Option<&Path>,
     recipe_path: PathBuf,
 ) -> Directories {
     Directories {
-        recipe_dir: source_dir,
+        recipe_dir: recipe_path
+            .parent()
+            .expect("recipe path must have a parent")
+            .to_path_buf(),
         recipe_path,
         cache_dir: cache_dir
             .map(Path::to_path_buf)
