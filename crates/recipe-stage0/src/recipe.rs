@@ -488,6 +488,8 @@ pub struct Script {
     pub env: IndexMap<String, String>,
     #[serde(default)]
     pub secrets: Vec<String>,
+    #[serde(default)]
+    pub interpreter: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

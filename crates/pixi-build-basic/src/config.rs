@@ -21,6 +21,8 @@ pub struct BasicBackendConfig {
     /// Extra input globs to include in addition to the default ones
     #[serde(default)]
     pub extra_input_globs: Vec<String>,
+    /// The interpreter to use for running the script commands
+    pub interpreter: Option<String>,
 }
 
 impl BackendConfig for BasicBackendConfig {
@@ -61,6 +63,10 @@ impl BackendConfig for BasicBackendConfig {
             } else {
                 target_config.extra_input_globs.clone()
             },
+            interpreter: target_config
+                .interpreter
+                .clone()
+                .or(self.interpreter.clone()),
         })
     }
 }
