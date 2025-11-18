@@ -3,6 +3,14 @@ name = "pixi-build-python"
 version = "0.4.2"
 edition.workspace = true
 
+[lib]
+name = "pixi_build_python"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pixi-build-python"
+path = "src/main.rs"
+
 [features]
 default = ["rustls-tls"]
 rustls-tls = ["pixi-build-backend/rustls-tls"]
@@ -20,6 +28,8 @@ pyproject-toml = { workspace = true }
 fs-err = { workspace = true }
 once_cell = { workspace = true }
 thiserror = { workspace = true }
+serde_yaml = { workspace = true }
+tracing = { workspace = true }
 
 pixi-build-backend = { workspace = true }
 
@@ -32,3 +42,4 @@ insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
 toml_edit = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+tracing-subscriber = { workspace = true }

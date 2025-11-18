@@ -150,21 +150,14 @@ impl MetadataProvider for PyprojectMetadataProvider {
         if self.ignore_pyproject_manifest {
             return Ok(None);
         }
-        Ok(self
-            .ensure_manifest_project()?
-            .and_then(|proj| proj.license.as_ref())
-            .map(|license| match license {
-                pyproject_toml::License::Text { text } => text.clone(),
-                pyproject_toml::License::File { file } => file.to_string_lossy().to_string(),
-                pyproject_toml::License::Spdx(spdx) => spdx.clone(),
-            }))
+        Ok(None)
     }
 
     /// Returns the package license file path from the pyproject.toml manifest.
     ///
     /// If `ignore_pyproject_manifest` is true, returns `None`. Otherwise, extracts
     /// the license file path from the project section if the license is specified
-    /// as a file reference.
+    /// as a file reference. The returned path is relative to the build source directory.
     fn license_file(&mut self) -> Result<Option<String>, Self::Error> {
         if self.ignore_pyproject_manifest {
             return Ok(None);
@@ -173,7 +166,7 @@ impl MetadataProvider for PyprojectMetadataProvider {
             .ensure_manifest_project()?
             .and_then(|proj| proj.license.as_ref())
             .and_then(|license| match license {
-                pyproject_toml::License::File { file } => Some(file.to_string_lossy().to_string()),
+                pyproject_toml::License::File { file: _ } => None,
                 pyproject_toml::License::Text { text: _ } => None,
                 pyproject_toml::License::Spdx(_) => None,
             }))
@@ -238,6 +231,44 @@ impl PyprojectMetadataProvider {
             .ensure_manifest_project()?
             .and_then(|proj| proj.requires_python.as_ref())
             .map(|req_py| req_py.to_string()))
+    }
+
+    /// Extract build-system requirements from pyproject.toml
+    pub fn build_system_requires(&self) -> Result<Vec<String>, MetadataError> {
+        if self.ignore_pyproject_manifest {
+            return Ok(Vec::new());
+        }
+
+        Ok(self
+            .ensure_manifest()?
+            .build_system
+            .as_ref()
+            .map(|build_system| {
+                build_system
+                    .requires
+                    .iter()
+                    .map(|req| req.name.to_string())
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// Extract project dependencies from pyproject.toml
+    pub fn project_dependencies(&self) -> Result<Vec<String>, MetadataError> {
+        if self.ignore_pyproject_manifest {
+            return Ok(Vec::new());
+        }
+
+        Ok(self
+            .ensure_manifest_project()?
+            .map(|project| {
+                project
+                    .dependencies
+                    .as_ref()
+                    .map(|deps| deps.iter().map(|req| req.name.to_string()).collect())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default())
     }
 }
 
@@ -319,10 +350,10 @@ license = {file = "LICENSE.txt"}
         let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
         let mut provider = create_metadata_provider(temp_dir.path());
 
-        assert_eq!(provider.license().unwrap(), Some("LICENSE.txt".to_string()));
+        assert_eq!(provider.license().unwrap(), None);
         assert_eq!(
             provider.license_file().unwrap(),
-            Some("LICENSE.txt".to_string())
+            Some("${{ SRC_DIR }}/LICENSE.txt".to_string())
         );
     }
 
@@ -501,6 +532,163 @@ requires-python = ">=3.13"
         assert_eq!(
             provider.requires_python().unwrap(),
             Some(">=3.13".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_system_requires_extraction() {
+        let pyproject_toml_content = r#"
+[build-system]
+requires = ["setuptools>=45", "wheel", "numpy"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-package"
+version = "1.0.0"
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let provider = create_metadata_provider(temp_dir.path());
+
+        let build_requires = provider.build_system_requires().unwrap();
+        assert_eq!(build_requires, vec!["setuptools", "wheel", "numpy"]);
+    }
+
+    #[test]
+    fn test_project_dependencies_extraction() {
+        let pyproject_toml_content = r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+dependencies = [
+    "numpy>=1.20.0",
+    "requests",
+    "torch>=1.0"
+]
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let provider = create_metadata_provider(temp_dir.path());
+
+        let project_deps = provider.project_dependencies().unwrap();
+        assert_eq!(project_deps, vec!["numpy", "requests", "torch"]);
+    }
+
+    #[test]
+    fn test_empty_dependencies() {
+        let pyproject_toml_content = r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let provider = create_metadata_provider(temp_dir.path());
+
+        let build_requires = provider.build_system_requires().unwrap();
+        assert!(build_requires.is_empty());
+
+        let project_deps = provider.project_dependencies().unwrap();
+        assert!(project_deps.is_empty());
+    }
+
+    #[test]
+    fn test_dependencies_with_ignore_flag() {
+        let pyproject_toml_content = r#"
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "test-package"
+version = "1.0.0"
+dependencies = ["numpy", "requests"]
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let provider = PyprojectMetadataProvider::new(temp_dir.path(), true); // ignore = true
+
+        let build_requires = provider.build_system_requires().unwrap();
+        assert!(build_requires.is_empty());
+
+        let project_deps = provider.project_dependencies().unwrap();
+        assert!(project_deps.is_empty());
+    }
+
+    #[test]
+    fn test_license_file_handling() {
+        // Test license specified as file - should set license_file, not license
+        let pyproject_toml_content = r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+license = { file = "LICENSE" }
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        // Should return None for license (since it's specified as file)
+        assert_eq!(provider.license().unwrap(), None);
+
+        // Should return the file path for license_file relative to build source
+        assert_eq!(
+            provider.license_file().unwrap(),
+            Some("${{ SRC_DIR }}/LICENSE".to_string())
+        );
+    }
+
+    #[test]
+    fn test_license_text_handling() {
+        // Test license specified as text - should set license, not license_file
+        let pyproject_toml_content = r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+license = { text = "MIT" }
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        // Should return the license text
+        assert_eq!(provider.license().unwrap(), Some("MIT".to_string()));
+
+        // Should return None for license_file (since it's specified as text)
+        assert_eq!(provider.license_file().unwrap(), None);
+    }
+
+    #[test]
+    fn test_license_spdx_handling() {
+        // Test license specified as SPDX identifier - should set license, not license_file
+        let pyproject_toml_content = r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+license = "MIT"
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        // Should return the SPDX identifier
+        assert_eq!(provider.license().unwrap(), Some("MIT".to_string()));
+
+        // Should return None for license_file (since it's specified as SPDX)
+        assert_eq!(provider.license_file().unwrap(), None);
+    }
+
+    #[test]
+    fn test_license_file_with_directory_path() {
+        // Test license file with directory path - should preserve the relative path
+        let pyproject_toml_content = r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+license = { file = "docs/LICENSE" }
+"#;
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        // Should return None for license (since it's specified as file)
+        assert_eq!(provider.license().unwrap(), None);
+
+        // Should return the relative path for license_file
+        assert_eq!(
+            provider.license_file().unwrap(),
+            Some("${{ SRC_DIR }}/docs/LICENSE".to_string())
         );
     }
 

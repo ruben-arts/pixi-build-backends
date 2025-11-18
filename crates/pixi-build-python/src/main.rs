@@ -1,6 +1,7 @@
 mod build_script;
 mod config;
 mod metadata;
+pub mod pypi_conda_mapping;
 
 use build_script::{BuildPlatform, BuildScriptContext, Installer};
 use config::PythonBackendConfig;
@@ -12,6 +13,7 @@ use pixi_build_backend::{
     traits::ProjectModel,
 };
 use pixi_build_types::ProjectModelV1;
+use pypi_conda_mapping::PypiCondaMapper;
 use pyproject_toml::PyProjectToml;
 use rattler_conda_types::{ChannelUrl, Platform, package::EntryPoint};
 use recipe_stage0::matchspec::PackageDependency;
@@ -90,6 +92,79 @@ impl GenerateRecipe for PythonGenerator {
         let mut generated_recipe =
             GeneratedRecipe::from_model(model.clone(), &mut pyproject_metadata_provider)
                 .into_diagnostic()?;
+
+        // Extract PyPI dependencies from pyproject.toml and convert to conda packages
+        let pypi_conda_mapper = PypiCondaMapper::new();
+
+        // Convert build-system.requires to build dependencies
+        let build_system_requires = pyproject_metadata_provider
+            .build_system_requires()
+            .into_diagnostic()?;
+        let mut unmapped_packages = Vec::new();
+
+        // Process build-system dependencies and collect unmapped ones
+        for pypi_dep in &build_system_requires {
+            match pypi_conda_mapper.map_package(pypi_dep) {
+                Some(conda_packages) => {
+                    for conda_pkg in conda_packages {
+                        if !conda_pkg.is_empty() {
+                            generated_recipe
+                                .recipe
+                                .requirements
+                                .host
+                                .push(conda_pkg.parse().into_diagnostic()?);
+                        }
+                    }
+                }
+                None => {
+                    unmapped_packages.push(pypi_dep.clone());
+                }
+            }
+        }
+
+        // Convert project.dependencies to run dependencies
+        let project_dependencies = pyproject_metadata_provider
+            .project_dependencies()
+            .into_diagnostic()?;
+
+        // Process project dependencies and collect unmapped ones
+        for pypi_dep in &project_dependencies {
+            match pypi_conda_mapper.map_package(pypi_dep) {
+                Some(conda_packages) => {
+                    for conda_pkg in conda_packages {
+                        if !conda_pkg.is_empty() {
+                            generated_recipe
+                                .recipe
+                                .requirements
+                                .run
+                                .push(conda_pkg.parse().into_diagnostic()?);
+                        }
+                    }
+                }
+                None => {
+                    unmapped_packages.push(pypi_dep.clone());
+                }
+            }
+        }
+
+        // Error if any packages were unmapped
+        if !unmapped_packages.is_empty() {
+            return if unmapped_packages.len() == 1 {
+                Err(
+                    crate::pypi_conda_mapping::PypiCondaMappingError::UnmappedPackage {
+                        package: unmapped_packages[0].clone(),
+                    }
+                    .into(),
+                )
+            } else {
+                Err(
+                    crate::pypi_conda_mapping::PypiCondaMappingError::MultipleUnmappedPackages {
+                        packages: unmapped_packages.join(", "),
+                    }
+                    .into(),
+                )
+            };
+        }
 
         let requirements = &mut generated_recipe.recipe.requirements;
 
@@ -816,5 +891,186 @@ version = "0.1.0"
         let generator = PythonGenerator::default();
         let result = generator.extract_input_globs_from_build(&config, PathBuf::new(), false);
         insta::assert_debug_snapshot!(result);
+    }
+
+    #[test]
+    fn test_pypi_to_conda_mapping_integration() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create a temporary directory with pyproject.toml that has PyPI dependencies
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let pyproject_path = temp_dir.path().join("pyproject.toml");
+
+        fs::write(
+            &pyproject_path,
+            r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+dependencies = [
+    "numpy>=1.20.0",
+    "torch",
+    "requests"
+]
+
+[build-system]
+requires = [
+    "setuptools",
+    "wheel",
+    "numpy"
+]
+"#,
+        )
+        .expect("Failed to write pyproject.toml");
+
+        let model = minimal_project();
+        let config = PythonBackendConfig::default();
+        let generator = PythonGenerator::default();
+
+        let result = generator.generate_recipe(
+            &model,
+            &config,
+            temp_dir.path().to_path_buf(),
+            Platform::current(),
+            None,
+            &HashSet::new(),
+            Vec::new(),
+        );
+
+        let recipe = result.expect("Recipe generation should succeed");
+
+        // Check that host dependencies include mapped conda packages
+        let host_deps: Vec<String> = recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|dep| dep.to_string())
+            .collect();
+        assert!(host_deps.iter().any(|dep| dep.contains("setuptools")));
+        assert!(host_deps.iter().any(|dep| dep.contains("wheel")));
+        assert!(host_deps.iter().any(|dep| dep.contains("numpy")));
+
+        // Check that run dependencies include mapped conda packages
+        let run_deps: Vec<String> = recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|dep| dep.to_string())
+            .collect();
+        assert!(run_deps.iter().any(|dep| dep.contains("numpy")));
+        assert!(run_deps.iter().any(|dep| dep.contains("pytorch"))); // torch -> pytorch
+        assert!(run_deps.iter().any(|dep| dep.contains("requests")));
+    }
+
+    #[test]
+    fn test_pypi_to_conda_mapping_unmapped_package_error() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create a temporary directory with pyproject.toml that has an unmapped PyPI dependency
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let pyproject_path = temp_dir.path().join("pyproject.toml");
+
+        fs::write(
+            &pyproject_path,
+            r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+dependencies = [
+    "numpy",
+    "definitely-unknown-package-xyz"
+]
+"#,
+        )
+        .expect("Failed to write pyproject.toml");
+
+        let model = minimal_project();
+        let config = PythonBackendConfig::default();
+        let generator = PythonGenerator::default();
+
+        let result = generator.generate_recipe(
+            &model,
+            &config,
+            temp_dir.path().to_path_buf(),
+            Platform::current(),
+            None,
+            &HashSet::new(),
+            Vec::new(),
+        );
+
+        // Should fail due to unmapped package
+        match result {
+            Err(e) => {
+                let error_msg = format!("{}", e);
+                assert!(error_msg.contains("definitely-unknown-package-xyz"));
+                assert!(error_msg.contains("has no conda mapping"));
+            }
+            Ok(_) => panic!("Expected error for unmapped package, but generation succeeded"),
+        }
+    }
+
+    #[test]
+    fn test_pypi_to_conda_mapping_multiple_unmapped_packages() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create a temporary directory with pyproject.toml that has multiple unmapped PyPI dependencies
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let pyproject_path = temp_dir.path().join("pyproject.toml");
+
+        fs::write(
+            &pyproject_path,
+            r#"
+[project]
+name = "test-package"
+version = "1.0.0"
+dependencies = [
+    "numpy",
+    "unknown-run-package-1",
+    "unknown-run-package-2"
+]
+
+[build-system]
+requires = [
+    "setuptools",
+    "unknown-build-package-1",
+    "unknown-build-package-2"
+]
+"#,
+        )
+        .expect("Failed to write pyproject.toml");
+
+        let model = minimal_project();
+        let config = PythonBackendConfig::default();
+        let generator = PythonGenerator::default();
+
+        let result = generator.generate_recipe(
+            &model,
+            &config,
+            temp_dir.path().to_path_buf(),
+            Platform::current(),
+            None,
+            &HashSet::new(),
+            Vec::new(),
+        );
+
+        // Should fail due to multiple unmapped packages
+        match result {
+            Err(e) => {
+                let error_msg = format!("{}", e);
+                assert!(error_msg.contains("Multiple PyPI packages have no conda mapping"));
+                assert!(error_msg.contains("unknown-build-package-1"));
+                assert!(error_msg.contains("unknown-build-package-2"));
+                assert!(error_msg.contains("unknown-run-package-1"));
+                assert!(error_msg.contains("unknown-run-package-2"));
+            }
+            Ok(_) => {
+                panic!("Expected error for multiple unmapped packages, but generation succeeded")
+            }
+        }
     }
 }

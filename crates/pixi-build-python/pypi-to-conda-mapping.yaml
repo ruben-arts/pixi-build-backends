@@ -1,0 +1,293 @@
+# PyPI to Conda package name mapping
+# Format: pypi_package_name -> conda_package_name(s)
+# This file maps common PyPI package names to their conda-forge equivalents
+
+# Core Python packages
+pip:
+  conda: [pip]
+setuptools:
+  conda: [setuptools]
+wheel:
+  conda: [wheel]
+build:
+  conda: [python-build]
+flit-core:
+  conda: [flit-core]
+flit:
+  conda: [flit]
+meson-python:
+  conda: [meson-python]
+cython:
+  conda: [cython]
+hatchling:
+  conda: [hatchling]
+hatch:
+  conda: [hatch]
+hatch-build:
+  conda: [hatch-build]
+hatch-pypi:
+  conda: [hatch-pypi]
+hatch-vcs:
+  conda: [hatch-vcs]
+archspec:
+  conda: [archspec]
+boltons:
+  conda: [boltons]
+conda-package-handling:
+  conda: [conda-package-handling]
+distro:
+  conda: [distro]
+frozendict:
+  conda: [frozendict]
+jsonpatch:
+  conda: [jsonpatch]
+menuinst:
+  conda: [menuinst]
+packaging:
+  conda: [packaging]
+platformdirs:
+  conda: [platformdirs]
+pluggy:
+  conda: [pluggy]
+pycosat:
+  conda: [pycosat]
+ruamel-yaml:
+  conda: [ruamel.yaml]
+truststore:
+  conda: [truststore]
+zstandard:
+  conda: [zstandard]
+# Scientific/Data packages
+numpy:
+  conda: [numpy]
+scipy:
+  conda: [scipy]
+pandas:
+  conda: [pandas]
+matplotlib:
+  conda: [matplotlib]
+seaborn:
+  conda: [seaborn]
+scikit-learn:
+  conda: [scikit-learn]
+sklearn:
+  conda: [scikit-learn] # sklearn is alias for scikit-learn on PyPI
+poetry-core:
+  conda: [poetry-core]
+# Machine Learning
+torch:
+  conda: [pytorch]
+torchvision:
+  conda: [torchvision]
+tensorflow:
+  conda: [tensorflow]
+keras:
+  conda: [keras]
+xgboost:
+  conda: [xgboost]
+lightgbm:
+  conda: [lightgbm]
+
+# Web frameworks
+django:
+  conda: [django]
+flask:
+  conda: [flask]
+fastapi:
+  conda: [fastapi]
+requests:
+  conda: [requests]
+urllib3:
+  conda: [urllib3]
+httpx:
+  conda: [httpx]
+
+# Database
+sqlalchemy:
+  conda: [sqlalchemy]
+psycopg2:
+  conda: [psycopg2]
+psycopg2-binary:
+  conda: [psycopg2]
+pymongo:
+  conda: [pymongo]
+
+# Image processing
+pillow:
+  conda: [pillow]
+opencv-python:
+  conda: [opencv]
+opencv-python-headless:
+  conda: [opencv]
+
+# Async/Concurrent
+asyncio:
+  conda: [] # Built into Python 3.7+
+aiohttp:
+  conda: [aiohttp]
+uvloop:
+  conda: [uvloop]
+
+# Utilities
+pydantic:
+  conda: [pydantic]
+click:
+  conda: [click]
+rich:
+  conda: [rich]
+typer:
+  conda: [typer]
+tqdm:
+  conda: [tqdm]
+python-dateutil:
+  conda: [python-dateutil]
+pytz:
+  conda: [pytz]
+pyyaml:
+  conda: [pyyaml]
+toml:
+  conda: [toml]
+tomli:
+  conda: [tomli]
+
+# Testing
+pytest:
+  conda: [pytest]
+pytest-cov:
+  conda: [pytest-cov]
+coverage:
+  conda: [coverage]
+mock:
+  conda: [] # Built into Python 3.3+
+
+# Linting/Formatting
+black:
+  conda: [black]
+flake8:
+  conda: [flake8]
+mypy:
+  conda: [mypy]
+isort:
+  conda: [isort]
+ruff:
+  conda: [ruff]
+
+# Documentation
+sphinx:
+  conda: [sphinx]
+mkdocs:
+  conda: [mkdocs]
+
+# Common name differences (PyPI -> conda-forge)
+beautifulsoup4:
+  conda: [beautifulsoup4]
+lxml:
+  conda: [lxml]
+msgpack:
+  conda: [msgpack-python]
+protobuf:
+  conda: [protobuf]
+grpcio:
+  conda: [grpcio]
+
+# JSON/YAML processing
+jsonschema:
+  conda: [jsonschema]
+pydantic-core:
+  conda: [pydantic-core]
+
+# HTTP clients
+certifi:
+  conda: [certifi]
+charset-normalizer:
+  conda: [charset-normalizer]
+idna:
+  conda: [idna]
+
+# CLI tools
+argparse:
+  conda: [] # Built into Python 2.7+
+configparser:
+  conda: [] # Built into Python 3.2+
+
+# Cryptography
+cryptography:
+  conda: [cryptography]
+pycryptodome:
+  conda: [pycryptodome]
+
+# File handling
+pathlib:
+  conda: [] # Built into Python 3.4+
+pathlib2:
+  conda: [pathlib2]
+
+# Logging
+loguru:
+  conda: [loguru]
+
+# Data validation
+marshmallow:
+  conda: [marshmallow]
+cerberus:
+  conda: [cerberus]
+
+# Time/Date
+arrow:
+  conda: [arrow]
+pendulum:
+  conda: [pendulum]
+
+# Caching
+cachetools:
+  conda: [cachetools]
+diskcache:
+  conda: [diskcache]
+
+# Environment/Configuration
+python-dotenv:
+  conda: [python-dotenv]
+environs:
+  conda: [environs]
+
+# Serialization
+pickle:
+  conda: [] # Built into Python
+dill:
+  conda: [dill]
+joblib:
+  conda: [joblib]
+
+# Progress bars
+progressbar2:
+  conda: [progressbar2]
+
+# String processing
+regex:
+  conda: [regex]
+fuzzywuzzy:
+  conda: [fuzzywuzzy]
+
+# Math/Statistics
+sympy:
+  conda: [sympy]
+statsmodels:
+  conda: [statsmodels]
+
+# Plotting extensions
+plotly:
+  conda: [plotly]
+bokeh:
+  conda: [bokeh]
+altair:
+  conda: [altair]
+
+# Jupyter
+jupyter:
+  conda: [jupyter]
+notebook:
+  conda: [notebook]
+jupyterlab:
+  conda: [jupyterlab]
+ipython:
+  conda: [ipython]

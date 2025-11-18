@@ -4251,10 +4251,13 @@ dependencies = [
  "recipe-stage0",
  "serde",
  "serde_json",
+ "serde_yaml",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "toml_edit 0.23.7",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
