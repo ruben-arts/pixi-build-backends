@@ -3896,6 +3896,7 @@ dependencies = [
  "miette",
  "minijinja",
  "once_cell",
+ "ordermap",
  "pep508_rs",
  "pixi-build-backend",
  "pixi_build_types",

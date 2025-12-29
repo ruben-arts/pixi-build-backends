@@ -34,7 +34,10 @@ pixi_build_types = { workspace = true }
 recipe-stage0 = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 url = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+ordermap = { workspace = true }
+fs-err = { workspace = true }
+insta = { workspace = true, features = ["yaml", "redactions"] }
